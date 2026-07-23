@@ -7,6 +7,8 @@
 //
 // See docs/specs/2026-07-22-track-playlist-preview-design.md for the design.
 
+import "./ui/rowHighlight";
+
 async function main(): Promise<void> {
   // Entry points, engine and UI are wired up here. See the design spec.
 }
