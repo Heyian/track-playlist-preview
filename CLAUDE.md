@@ -26,7 +26,7 @@ There is no linter. `bun run check` is the whole gate.
 ## Documentation
 
 - [Design spec](docs/specs/2026-07-22-track-playlist-preview-design.md) — architecture, module
-  boundaries, verified internal-API findings, and acceptance criteria AC1–AC41.
+  boundaries, verified internal-API findings, and acceptance criteria AC1–AC45.
 - [ADR 0001](docs/adr/0001-preview-audio-via-trackpreview-graphql.md) — why preview audio comes from
   the `trackPreview` GraphQL operation instead of driving `Spicetify.Player`.
 
