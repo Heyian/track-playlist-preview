@@ -51,6 +51,7 @@ describe("enumerate", () => {
     const d = deps();
     const refs = await enumerate("spotify:artist:x", d, (u) => collectionTypeForUri(u, matcher));
     expect(refs.map((r) => r.uri)).toEqual(["spotify:track:a"]);
+    expect(d.artistOverview).toHaveBeenCalled();
   });
   it("returns [] for a non-collection URI", async () => {
     const d = deps();

@@ -63,7 +63,7 @@ async function main(): Promise<void> {
     notify: notifications,
     playbar,
     highlight: rowHighlight,
-    onActiveCollection: () => actionBar.start(),
+    onActiveCollection: () => actionBar.refresh(),
   });
 
   const actionBar = createActionBarButton({
@@ -84,6 +84,7 @@ async function main(): Promise<void> {
     onPreviewCollection: (uri) => void controller.startCollection(uri, 0),
     onPreviewTrack: (uri) => void controller.startTrack(uri),
     onPreviewFromHere: (uri, contextUri) => void controller.startFromHere(uri, contextUri),
+    getDurationMs: () => settings.getDurationMs(),
   });
 
   actionBar.start();

@@ -7,6 +7,7 @@ export interface ContextMenuDeps {
   onPreviewCollection(uri: string): void;
   onPreviewTrack(uri: string): void;
   onPreviewFromHere(uri: string, contextUri?: string): void;
+  getDurationMs(): number;
 }
 
 export function createContextMenus(deps: ContextMenuDeps) {
@@ -33,8 +34,9 @@ export function createContextMenus(deps: ContextMenuDeps) {
       const isSingleTrack = (uris: string[]): boolean =>
         uris.length === 1 && Spicetify.URI.isTrack(uris[0]!);
 
+      const trackLabel = `Preview track (${Math.round(deps.getDurationMs() / 1000)}s)`;
       const previewTrack = new Spicetify.ContextMenu.Item(
-        "Preview track (15s)",
+        trackLabel,
         (uris) => {
           if (uris[0]) deps.onPreviewTrack(uris[0]);
         },

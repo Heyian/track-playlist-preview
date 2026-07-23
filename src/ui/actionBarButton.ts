@@ -54,13 +54,20 @@ export function createActionBarButton(deps: ActionBarDeps) {
     row.appendChild(button);
   }
 
+  let started = false;
+
   return {
     start(): void {
+      if (started) return;
+      started = true;
       inject();
       // Re-inject on SPA navigation and on late-rendering action bars.
       Spicetify.Platform.History.listen(() => queueMicrotask(inject));
       const observer = new MutationObserver(() => inject());
       observer.observe(document.body, { childList: true, subtree: true });
+    },
+    refresh(): void {
+      inject();
     },
   };
 }
