@@ -31,9 +31,13 @@ export function createActionBarButton(deps: ActionBarDeps) {
       existing?.remove();
       return;
     }
-    // AC31: never duplicate — one button per row.
+    // AC31: never duplicate — one button per row. Only write when the label
+    // actually changes: an unconditional textContent assignment replaces the
+    // child text node every call, and the body-wide observer below would see
+    // that mutation and re-fire inject() in an infinite loop, freezing the tab.
     if (existing) {
-      existing.textContent = label(deps.isActiveSession(uri));
+      const desired = label(deps.isActiveSession(uri));
+      if (existing.textContent !== desired) existing.textContent = desired;
       return;
     }
 
@@ -55,6 +59,19 @@ export function createActionBarButton(deps: ActionBarDeps) {
   }
 
   let started = false;
+  let scheduled = false;
+
+  // Coalesce a burst of DOM mutations into a single inject() on the next frame,
+  // instead of running inject() synchronously on every mutation. This yields to
+  // the renderer between passes and prevents a mutation storm on busy pages.
+  function schedule(): void {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      inject();
+    });
+  }
 
   return {
     start(): void {
@@ -62,8 +79,8 @@ export function createActionBarButton(deps: ActionBarDeps) {
       started = true;
       inject();
       // Re-inject on SPA navigation and on late-rendering action bars.
-      Spicetify.Platform.History.listen(() => queueMicrotask(inject));
-      const observer = new MutationObserver(() => inject());
+      Spicetify.Platform.History.listen(schedule);
+      const observer = new MutationObserver(schedule);
       observer.observe(document.body, { childList: true, subtree: true });
     },
     refresh(): void {
