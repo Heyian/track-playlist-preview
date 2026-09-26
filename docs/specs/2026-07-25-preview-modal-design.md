@@ -10,6 +10,9 @@ further into the shipped criteria than the modal's own surface: it removes the P
 AC8/AC13 assert on, and it covers the UI that AC34/AC42/AC45 and the replacement path (AC19/AC27)
 depend on.
 
+**Amended by:** [`2026-09-26-remove-from-playlist-design.md`](2026-09-26-remove-from-playlist-design.md): a
+Remove control (R1–R13) to fold into this modal's design and plan.
+
 ---
 
 ## Problem
