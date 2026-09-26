@@ -30,16 +30,15 @@ skipped automatically and reported at the end of the session.
 
 ## Install
 
-Requires [Spicetify](https://spicetify.app/docs/getting-started) and
+Requires [Spicetify](https://spicetify.app/docs/getting-started) **v3** and
 [Bun](https://bun.com/docs/installation).
 
 ```bash
 git clone https://github.com/Heyian/track-playlist-preview.git
 cd track-playlist-preview
 bun install
-bun run build            # bundles into your Spicetify Extensions folder
-spicetify config extensions track-playlist-preview.js
-spicetify apply
+bun run build            # bundles into your Spicetify modules folder
+spicetify apply          # restarts Spotify
 ```
 
 ## Settings
@@ -55,31 +54,31 @@ Open the profile menu in Spotify → **Track & Playlist Preview**.
 ## Development
 
 ```bash
-bun run build        # build into the Spicetify Extensions folder
-bun run build:local  # build into ./dist instead (minified), without installing
+bun run build        # build into <spicetify config>/modules/track-playlist-preview/
+bun run build:local  # build into ./dist/track-playlist-preview/ instead (minified), without installing
 bun run watch        # rebuild on change
 bun run check        # typecheck + tests
 bun run test         # tests only
 ```
 
-After any build, run `spicetify apply` for Spotify to pick up the change.
+After any build, run `spicetify apply` for Spotify to pick up the change. It force-restarts Spotify.
 
 The bundler is a small [Bun](https://bun.com/docs/bundler) script in [`build.ts`](build.ts). It
 aliases `react` / `react-dom` to Spotify's own `Spicetify.React` / `Spicetify.ReactDOM`, inlines any
-imported CSS into the output bundle, and wraps everything so the extension waits for Spicetify to
-finish loading before running.
+imported CSS into the output bundle, wraps everything so the module waits for Spicetify to finish
+loading before running, and writes the v3 module's `index.js` and `metadata.json` (version taken from
+`package.json`).
 
 ### Debugging against the live client
 
-Spotify is an Electron app, so it exposes the Chrome DevTools Protocol once devtools are enabled:
+Spotify is an Electron app, so it can expose the Chrome DevTools Protocol. Under Spicetify v3,
+`spicetify dev` enables developer mode, and Spotify started by `spicetify apply` listens on
+`127.0.0.1:8088`, which you can drive programmatically — useful for probing internal APIs without
+clicking through the UI:
 
 ```bash
-spicetify config always_enable_devtools 1
-spicetify apply
+node scripts/cdp-eval.mjs 'JSON.stringify(Spicetify.Modules.report)'
 ```
-
-Spotify then listens on `127.0.0.1:8088`, which you can drive programmatically — useful for probing
-internal APIs without clicking through the UI.
 
 ## Documentation
 

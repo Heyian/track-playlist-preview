@@ -1902,7 +1902,9 @@ declare namespace Spicetify {
 			onClick: (self: Button) => void;
 			disabled: boolean;
 			active: boolean;
-			element: HTMLButtonElement;
+			/** Always `null` under Spicetify v3, whose compat shim renders through React. */
+			element: HTMLButtonElement | null;
+			/** Always `null` under Spicetify v3. */
 			tippy: any;
 			register: () => void;
 			deregister: () => void;
@@ -1925,7 +1927,9 @@ declare namespace Spicetify {
 			onClick: (self: Widget) => void;
 			disabled: boolean;
 			active: boolean;
-			element: HTMLButtonElement;
+			/** Always `null` under Spicetify v3, whose compat shim renders through React. */
+			element: HTMLButtonElement | null;
+			/** Always `null` under Spicetify v3. */
 			tippy: any;
 			register: () => void;
 			deregister: () => void;

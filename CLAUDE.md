@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A [Spicetify](https://spicetify.app) **extension** that restores Spotify's removed track preview and
+A [Spicetify](https://spicetify.app) v3 **module** that restores Spotify's removed track preview and
 extends it to whole playlists, albums, artists and Liked Songs. Preview audio comes from Spotify's
 own preview clips played in an `<Audio>` element — the Spotify player itself is only paused and
 resumed, never seeked.
@@ -12,13 +12,13 @@ resumed, never seeked.
 ## Commands
 
 ```bash
-bun run build        # bundle into ~/.config/spicetify/Extensions/
-bun run build:local  # bundle into ./dist (minified), without installing
+bun run build        # bundle into <config>/modules/track-playlist-preview/
+bun run build:local  # bundle into ./dist/track-playlist-preview/ (minified), without installing
 bun run watch        # rebuild on change
 bun run check        # typecheck + tests — the full quality gate
 bun run test         # vitest only
 bun run typecheck    # tsc --noEmit only
-spicetify apply      # required after any build for Spotify to pick it up
+spicetify apply      # required after any build; force-kills and restarts Spotify
 ```
 
 There is no linter. `bun run check` is the whole gate.
@@ -41,7 +41,10 @@ was removed. It does four things worth knowing:
    never be loaded.
 3. Wraps output in a loop awaiting `Spicetify.React`, `ReactDOM` and `Platform`. Other namespaces
    (`Playbar`, `ContextMenu`, `GraphQL`, `Snackbar`) still need checking before use.
-4. Writes a single `track-playlist-preview.js` into the Extensions folder.
+4. Writes `index.js` and a `metadata.json` generated from `package.json` into
+   `<config>/modules/track-playlist-preview/`. v3 ignores the v2 `Extensions/` folder and rejects
+   `spicetify -c`; the modules folder is parsed from `spicetify path`, falling back to
+   `~/.config/spicetify/modules`.
 
 The bundler does **not** typecheck. A green build says nothing about types — run `bun run check`.
 
@@ -66,6 +69,10 @@ These are load-bearing; violating any is a defect. Full rationale in the spec's 
 - **`spotify:playlist:…` parses as `playlist-v2`, not `PLAYLIST`.** Gating a context-menu predicate
   on `URI.Type.PLAYLIST` silently never matches. Use `URI.isPlaylistV1OrV2()`.
 - **Only `playerCoordinator` may call `Spicetify.Player`,** and only `pause` / `resume`.
+- **Pass `Spicetify.Playbar.Button` icons as full `<svg>` markup, never an icon name.** Under v3,
+  stdlib's compat shim injects the string verbatim as SVG innerHTML, so `"skip-forward"` renders
+  an empty button. Build markup from `Spicetify.SVGIcons[name]`. Its `.element` / `.tippy` are
+  `null` under v3 — don't use them.
 
 ## Debugging against the live client
 
@@ -75,3 +82,10 @@ the UI, and is how every internal-API finding in the spec was verified.
 
 The committed harness is `scripts/cdp-eval.mjs`:
 `node scripts/cdp-eval.mjs 'Spicetify.Player.isPlaying()'`.
+
+- `Spicetify.Modules.report` shows which modules loaded and why any failed;
+  `Spicetify.Modules.list()` shows the loaded version.
+- stdlib's registries are importable ES modules, e.g. the Playbar buttons:
+  `(await import(location.origin + "/modules/stdlib/src/registers/playbarButton.js")).default` (a
+  `Set`). Source lives under `~/.config/spicetify/modules/stdlib/src/`.
+- A probe that registers UI must remove it in a `finally`, or it leaks into the live client.
