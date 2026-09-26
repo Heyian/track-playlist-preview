@@ -18,7 +18,10 @@ if (!expression) {
 async function firstPageTarget() {
   const res = await fetch(`http://127.0.0.1:${PORT}/json`);
   const targets = await res.json();
-  const page = targets.find((t) => t.type === "page" && t.webSocketDebuggerUrl);
+  // An open DevTools window is also a "page" target, and may be listed first.
+  const page = targets.find(
+    (t) => t.type === "page" && t.webSocketDebuggerUrl && !t.url.startsWith("devtools://"),
+  );
   if (!page) throw new Error("No page target with a WebSocket debugger URL found.");
   return page.webSocketDebuggerUrl;
 }
