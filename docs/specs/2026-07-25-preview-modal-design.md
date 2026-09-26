@@ -11,7 +11,7 @@ AC8/AC13 assert on, and it covers the UI that AC34/AC42/AC45 and the replacement
 depend on.
 
 **Amended by:** [`2026-09-26-remove-from-playlist-design.md`](2026-09-26-remove-from-playlist-design.md): a
-Remove control (R1–R13) to fold into this modal's design and plan.
+Remove control (R1–R16) to fold into this modal's design and plan.
 
 ---
 
