@@ -1,11 +1,11 @@
 # Remove From Playlist — Design Spec
 
 **Date:** 2026-09-26
-**Status:** Approved — amends the preview modal; built as part of it, not on its own
-**Builds on:** [`2026-07-25-preview-modal-design.md`](2026-07-25-preview-modal-design.md) (approved,
-not yet implemented) and [`2026-07-22-track-playlist-preview-design.md`](2026-07-22-track-playlist-preview-design.md)
-(the shipped extension). Criteria here are numbered **R1…** so they cannot collide with the modal
-spec's AC numbering, which is expected to change when the modal is re-grilled.
+**Status:** Approved — amends the preview panel; built as part of it, not on its own
+**Builds on:** [`2026-07-25-preview-modal-design.md`](2026-07-25-preview-modal-design.md) (revised
+2026-09-26 into the non-blocking **preview panel**, not yet implemented) and [`2026-07-22-track-playlist-preview-design.md`](2026-07-22-track-playlist-preview-design.md)
+(the shipped extension). Criteria here are numbered **R1…** so they cannot collide with the panel
+spec's AC numbering; they keep these ids after the 2026-09-26 re-grill.
 
 ---
 
@@ -13,24 +13,24 @@ spec's AC numbering, which is expected to change when the modal is re-grilled.
 
 Previewing a playlist is often triage: you listen to each clip and decide whether it stays. Today,
 dropping a track means leaving the preview flow and using Spotify's own row menu. This feature adds
-a one-click **Remove** control to the preview modal. It removes the track being previewed from the
+a one-click **Remove** control to the preview panel. It removes the track being previewed from the
 playlist the session was started from and moves straight on to the next track.
 
 ## Scope decision
 
-Remove is a **third control of the preview modal**, alongside Stop and Next. It is **not** a
-Playbar button: the modal spec removes the Playbar controls (its AC57), so a Playbar Remove would
-be thrown away. Nothing in this spec is built until the modal is built. This document is an input
-to the modal's own design session and implementation plan.
+Remove is a **third control of the preview panel**, alongside Stop and Next. It is **not** a
+Playbar button: the panel spec removes the Playbar controls (its AC57), so a Playbar Remove would
+be thrown away. Nothing in this spec is built until the panel is built. This document is an input
+to the panel's own design session and implementation plan.
 
-**Left to the modal design session** (deliberately not decided here):
+**Decided in the panel re-grill (2026-09-26)**, see the panel spec:
 
-- **Where the Undo affordance appears**: native `Spicetify.Snackbar.enqueueSnackbar` action
-  vs. an in-modal "Removed *X* · Undo" strip. Whichever is chosen must satisfy R11 for **every**
-  removal, including one that ends the session (R8). A Snackbar survives the modal closing, and an
-  in-modal strip does not. If the Snackbar is chosen, spike that it renders above an open
-  `PopupModal` and is clickable there.
-- The Remove control's placement, label and icon (`Spicetify.SVGIcons` has `minus` and `block`).
+- **Undo surface:** the panel spec's own **pending-removals stack** (AC67), one row per pending
+  removal, independent of the panel's open state. Spotify's Snackbar was rejected: its default
+  variant ignores action buttons and it shows at most 3 toasts, queueing the rest, so a burst of
+  removals would break R11.
+- **Remove control:** icon (`minus`) + text "Remove", apart from Stop/Next (AC68); `Delete` shortcut
+  while the panel has focus (AC66).
 
 ## Terms
 
@@ -64,8 +64,9 @@ Verified live over CDP (`scripts/cdp-eval.mjs`, Spotify 1.2.96.518) on 2026-09-2
 - **`PlaylistAPI.getContents`** items carry a per-row `uid`. It is not needed for URI-form removal
   and is not added to `TrackRef`.
 - **`LibraryAPI.remove`** exists (un-liking a track from Liked Songs). Not used; see Deferred Items.
-- **`Spicetify.Snackbar.enqueueSnackbar`** is live (native toast, can take an action button).
-  Relevant to the Undo-surface choice left to the modal session.
+- **`Spicetify.Snackbar.enqueueSnackbar`** is live (notistack, `maxSnack` 3), but Spotify's default
+  variant ignores `action`; only `enqueueCustomSnackbar` renders a button. See the panel spec for
+  why the Undo surface is our own stack instead.
 
 ---
 
@@ -76,11 +77,11 @@ Verified live over CDP (`scripts/cdp-eval.mjs`, Spotify 1.2.96.518) on 2026-09-2
 1. At session start, the controller decides **once** whether the session is a **removable
    session**: the source URI classifies as `playlist` and `getMetadata(uri).canRemove === true`
    (only literal `true`). The decision is fixed for the session. The same lookup captures the
-   playlist's `name` for the failure Snackbar (behaviour 8). If it rejects, the session is **not**
+   playlist's `name` for the failure notice (behaviour 8). If it rejects, the session is **not**
    removable, and the session itself still starts normally. *Preview from here* inside playlist P
    uses P as the source playlist; when the controller falls back to a single-track session, there
    is no source playlist and no Remove.
-2. The modal shows the Remove control only in a removable session. `removeCurrent()` in a
+2. The panel shows the Remove control only in a removable session. `removeCurrent()` in a
    non-removable session is a no-op: nothing scheduled, no call, no advance.
 3. Pressing Remove targets the **current entry**. It synchronously:
    - schedules a **pending removal** of that entry's track URI from the source playlist, capturing
@@ -88,7 +89,7 @@ Verified live over CDP (`scripts/cdp-eval.mjs`, Spotify 1.2.96.518) on 2026-09-2
    - invokes Next's engine advance (`skip()`): no inter-track gap, and Remove itself adds nothing
      to the "skipped, no preview" count. What follows is ordinary engine behaviour: the next entry
      resolves, is skipped for no clip, aborts, or, when nothing remains, the session ends
-     `completed` and the modal closes. The skipped entry's in-flight resolution or audio callbacks
+     `completed` and the panel closes. The skipped entry's in-flight resolution or audio callbacks
      are invalidated and have no effect.
 4. When its `UNDO_WINDOW_MS` deadline fires, a pending removal commits by calling
    `PlaylistAPI.remove(sourcePlaylist, [{ uri, uid: "" }])`, which removes **every** copy of the
@@ -98,7 +99,7 @@ Verified live over CDP (`scripts/cdp-eval.mjs`, Spotify 1.2.96.518) on 2026-09-2
    preserved). Undo never rewinds or restarts playback. After the commit call is issued, Undo
    reports failure.
 6. Each removal has its **own** independent window and Undo. Removals are independent of sessions:
-   Stop, closing the modal, completion, abort or replacement neither cancel, flush nor retarget a
+   Stop, closing the panel, completion, abort or replacement neither cancel, flush nor retarget a
    pending removal. Next does not affect pending removals either.
 7. **Excluded tracks:** when the engine reaches an **excluded track**, it passes over it immediately
    without resolving its preview, without playing it, without emitting `trackStarted` or
@@ -108,8 +109,8 @@ Verified live over CDP (`scripts/cdp-eval.mjs`, Spotify 1.2.96.518) on 2026-09-2
    sessions on P that started before it committed; later sessions no longer enumerate T, and if T
    is re-added to P afterwards it plays normally. Removals from P never affect a session on another
    playlist.
-8. **Failure:** if the commit call rejects, show an error Snackbar "Couldn't remove *Title* from
-   *Playlist*", using the title and name captured at Remove time (the modal's generic playlist
+8. **Failure:** if the commit call rejects, show an error notice "Couldn't remove *Title* from
+   *Playlist*", using the title and name captured at Remove time (the panel's generic playlist
    label if no name was available). No retry. The removal stops excluding T, and any later copy
    plays normally. The playlist is unchanged.
 
@@ -119,10 +120,11 @@ Verified live over CDP (`scripts/cdp-eval.mjs`, Spotify 1.2.96.518) on 2026-09-2
 | --- | --- | --- |
 | `pendingRemovals` | **new, pure** | `schedule(playlistUri, playlistName, track) → handle`, `undo(handle) → boolean`, and an exclusion query that takes the playlist and the session's start marker (e.g. a monotonic sequence), per behaviour 7. Timer and remove call are injected ports (`TimerPort`, `RemovePort`), the same pattern as `previewEngine`. Owns the window, the commit, and failure reporting via an injected `onError(trackTitle, playlistName)`. |
 | `previewEngine` | change | Optional `isExcluded(uri): boolean` dep. Checked in `playCurrent` before resolving. An excluded track advances immediately with no event and no count. |
-| `previewController` | change | Computes the removable-session flag once at session start via a `canRemove(uri)` port (also returning the name). Exposes it to the modal view. Adds `removeCurrent()`, which calls `pendingRemovals.schedule(...)` then `engine.skip()`, and is a no-op when not removable. Binds the engine's `isExcluded` to the current source playlist and session start marker. |
+| `previewController` | change | Computes the removable-session flag once at session start via a `canRemove(uri)` port (also returning the name). Exposes it to the panel view. Adds `removeCurrent()`, which calls `pendingRemovals.schedule(...)` then `engine.skip()`, and is a no-op when not removable. Binds the engine's `isExcluded` to the current source playlist and session start marker. |
 | `types/domain` | change | Add `RemovePort` (`(playlistUri, trackUri) => Promise<void>`) and the `isExcluded` engine dep type. |
 | `spotify/ports` | change | `playlistRemove: RemovePort` over `Platform.PlaylistAPI.remove`; `canRemove(uri)` over `getMetadata`. These are the only new `Spicetify` touches. |
-| `ui/previewModal` | change (modal spec) | Renders Remove when the view says the session is removable. Wires it to `controller.removeCurrent()`. Hosts or triggers the Undo affordance the modal session picks. |
+| `ui/previewPanel` | change (panel spec) | Renders Remove when the view says the session is removable. Wires it to `controller.removeCurrent()`. |
+| `ui/pendingRemovalsStack` | new (panel spec) | The Undo surface (panel spec AC67). |
 | `index.ts` | change | Build `pendingRemovals` with `realTimer`, `playlistRemove`, `notifications.error`. Pass it to the engine and controller. |
 
 `pendingRemovals` is deliberately not inside the engine: removals outlive sessions (behaviour 6),
@@ -141,7 +143,7 @@ Vitest, `*.test.ts` convention, fake `TimerPort` and `RemovePort`:
 - `previewEngine.test.ts`: excluded entries are not resolved, emit no `trackStarted`/`trackSkipped`
   and do not raise the `skipped` count; an all-excluded suffix ends the session `completed`; a
   skip during resolution discards the late URL, `null` or rejection.
-- `previewController.test.ts` (created by the modal work): removable flag from literal `true`
+- `previewController.test.ts` (created by the panel work): removable flag from literal `true`
   only, fixed per session, false on rejection; *Preview from here* uses the playlist, single-track
   fallback has no Remove; `removeCurrent` schedules then skips synchronously; not removable →
   complete no-op.
@@ -158,14 +160,14 @@ Revised after the cross-model critique (2026-09-26). Timing criteria are asserte
 **Availability**
 
 - **R1**: Given a session whose source playlist's `getMetadata` reports `canRemove` as literal
-  `true` at session start, the preview modal shows a Remove control. The lookup runs once per
+  `true` at session start, the preview panel shows a Remove control. The lookup runs once per
   session and its result is fixed for that session.
 - **R2**: Given a session started from a playlist whose `canRemove` is anything other than literal
   `true`, from Liked Songs, an album, an artist, or as a single-track session (including a
-  *Preview from here* that fell back to a single track), the preview modal shows **no** Remove
+  *Preview from here* that fell back to a single track), the preview panel shows **no** Remove
   control.
 - **R3**: Given the `canRemove` lookup rejects at session start, the session starts and runs
-  normally and the modal shows no Remove control.
+  normally and the panel shows no Remove control.
 - **R4**: Given *Preview from here* on a track inside playlist P, P is the source playlist for both
   the R1 lookup and the removal, and the session starts at the selected entry.
 - **R5**: Given a non-removable session, calling `removeCurrent()` schedules nothing, makes no
@@ -183,7 +185,7 @@ Revised after the cross-model critique (2026-09-26). Timing criteria are asserte
   URL, `null` result or rejection, and any stale audio callback, play no audio, emit no track event,
   change no count, cause no further advance, and do not abort the session.
 - **R8**: Given Remove is pressed on the last entry, or every entry after it is excluded, the
-  session ends as `completed` and the modal closes, and the removal still commits per R9 unless
+  session ends as `completed` and the panel closes, and the removal still commits per R9 unless
   undone.
 
 **Commit and Undo**
@@ -193,7 +195,7 @@ Revised after the cross-model critique (2026-09-26). Timing criteria are asserte
   `PlaylistAPI.remove(sourcePlaylist, [{ uri: trackUri, uid: "" }])` is made when that removal's
   deadline callback runs. After the call **succeeds**, the playlist contains no row with that track
   URI (all duplicates removed; spike r1). A rejected call follows R15.
-- **R10**: Given Remove was pressed and the session then ends by any cause (Stop, modal close,
+- **R10**: Given Remove was pressed and the session then ends by any cause (Stop, panel close,
   completion, abort, or engine-level replacement) inside the undo window, the removal keeps its
   original playlist, track and deadline and commits per R9 unless undone. Ending the session
   neither cancels nor commits it early, and its later commit or failure does not alter the
@@ -211,7 +213,7 @@ Revised after the cross-model critique (2026-09-26). Timing criteria are asserte
 
 - **R13**: Given a session on playlist P reaches an entry for track T that is an **excluded
   track**, it passes over it immediately: no preview resolution, no audio, no
-  `trackStarted`/`trackSkipped` event (the modal shows no skipping state), and no count in the
+  `trackStarted`/`trackSkipped` event (the panel shows no skipping state), and no count in the
   end-of-session summary. T is excluded in a session on P exactly when (a) a removal of T from P is
   pending, in any session on P, including one started after the Remove press, or (b) a removal of
   T from P succeeded after that session started. A removal from P never excludes anything in a
@@ -222,9 +224,9 @@ Revised after the cross-model critique (2026-09-26). Timing criteria are asserte
 
 **Failure and boundaries**
 
-- **R15**: Given the commit call rejects, an error Snackbar "Couldn't remove *Title* from
+- **R15**: Given the commit call rejects, an error notice "Couldn't remove *Title* from
   *Playlist*" is shown, using the track title and the source playlist's name captured when Remove
-  was pressed (the modal's generic playlist label if no name was available), even if the session
+  was pressed (the panel's generic playlist label if no name was available), even if the session
   has ended. No retry is made, the active session (if any) is unaffected, and the removal no longer
   excludes T (R14).
 - **R16**: Only `spotify/ports` calls `Spicetify.Platform.PlaylistAPI.remove` / `getMetadata` for
@@ -235,7 +237,7 @@ Revised after the cross-model critique (2026-09-26). Timing criteria are asserte
 
 ## Deferred Items
 
-Recorded as **UNFILED**. The user opens tracker issues themselves (see the modal spec's Deferred
+Recorded as **UNFILED**. The user opens tracker issues themselves (see the panel spec's Deferred
 Items). Not yet filed against `Heyian/track-playlist-preview`:
 
 - **UNFILED**: Remove (un-like) from **Liked Songs** during a Liked Songs session.
@@ -244,10 +246,9 @@ Items). Not yet filed against `Heyian/track-playlist-preview`:
   - *Required:* a removable-session rule for `spotify:collection:tracks`, a `LibraryAPI.remove`
     commit path in `pendingRemovals`, and wording that says "unlike" rather than "remove".
   - *Integration points:* `pendingRemovals` `RemovePort`, `spotify/ports`, controller removable flag.
-  - *Priority:* low. Revisit after the modal ships.
+  - *Priority:* low. Revisit after the panel ships.
 
-**Handed to the modal design session (not deferred):** the Undo surface and the Remove control's
-placement/icon. See **Scope decision**.
+The Undo surface and the Remove control were decided in the panel re-grill; see **Scope decision**.
 
 ## Glossary Updates & ADRs
 
@@ -255,7 +256,7 @@ placement/icon. See **Scope decision**.
 session, pending removal, undo window, excluded track).
 
 **ADRs:** none. The delayed-commit removal is cheap to reverse (one module), so it fails the
-hard-to-reverse criterion. No conflict with ADR 0001 or the modal spec's planned ADR 0002.
+hard-to-reverse criterion. No conflict with ADR 0001. (The panel spec cancelled its planned ADR 0002.)
 
 ---
 
@@ -269,10 +270,10 @@ settings (no new key: `UNDO_WINDOW_MS` is a constant).
 | --- | --- |
 | `src/pendingRemovals.ts` + `.test.ts` | **New.** |
 | `src/previewEngine.ts` + `.test.ts` | Optional `isExcluded` dep and pass-over logic. |
-| `src/previewController.ts` (+ test from modal work) | Removable flag, `removeCurrent()`, `isExcluded` binding. |
+| `src/previewController.ts` (+ test from panel work) | Removable flag, `removeCurrent()`, `isExcluded` binding. |
 | `src/types/domain.ts` | `RemovePort`, engine `isExcluded` dep type. |
 | `src/spotify/ports.ts` | `playlistRemove`, `canRemove`. |
-| `src/ui/previewModal.tsx` (modal spec) | Remove control and Undo affordance. |
+| `src/ui/previewPanel.tsx`, `src/ui/pendingRemovalsStack.tsx` (panel spec) | Remove control and Undo stack. |
 | `src/index.ts` | Wire `pendingRemovals`. |
 
 ## Manual Operator Steps
@@ -284,15 +285,15 @@ client.
 
 | Doc | Change |
 | --- | --- |
-| `docs/specs/2026-07-25-preview-modal-design.md` | One-line pointer in the header to this spec (done with this spec). The modal session folds R1–R16 into its plan. |
+| `docs/specs/2026-07-25-preview-modal-design.md` | One-line pointer in the header to this spec (done). Revised 2026-09-26 into the panel spec, which folds R1–R16 into its plan. |
 | `CLAUDE.md` | At implementation: add `pendingRemovals` to the Architecture module line. |
-| `README.md` | At implementation: document Remove + Undo in the preview modal (editable playlists only). |
+| `README.md` | At implementation: document Remove + Undo in the preview panel (editable playlists only). |
 
 ---
 
 ## Implementation Plan Guidance
 
-**No standalone plan.** This spec is implemented inside the preview modal's plan. That plan must
+**No standalone plan.** This spec is implemented inside the preview panel's plan. That plan must
 include tasks for every file in **Config & Infrastructure Impact** and the spikes below, and must
 extend its cross-model review focus to cover R1–R16.
 
@@ -301,8 +302,7 @@ Spikes to add before building Remove:
 - (r1) Confirm `PlaylistAPI.remove(uri, [{ uri: trackUri, uid: "" }])` removes **all** copies of a
   duplicated track (R9). If it removes only one, collect every row's `uid` via `getContents` at
   commit time instead, and update R9's call shape.
-- (r2) Depending on the modal session's Undo-surface choice: confirm the chosen surface is visible
-  and clickable above an open `PopupModal`, and still available after the modal closes (R11).
+- (r2) *Superseded by the panel spec's spike (p1):* the Undo surface is our own body-level stack.
 
 > **For the plan author (`superpowers:writing-plans`):**
 >
@@ -339,6 +339,6 @@ Spikes to add before building Remove:
 >
 > ### Before finishing the branch (advisory cross-model review)
 >
-> After the final build passes — and before wrapping up via `superpowers:finishing-a-development-branch` — if a cross-model review helper is available (e.g. the Codex plugin's adversarial review), run it with focus: *"Judge correctness against the spec's acceptance criteria (R1–R16, plus the modal spec's ACs) only. Do not flag anything outside the stated criteria — no design alternatives, hardening, or scope the spec did not claim."*
+> After the final build passes — and before wrapping up via `superpowers:finishing-a-development-branch` — if a cross-model review helper is available (e.g. the Codex plugin's adversarial review), run it with focus: *"Judge correctness against the spec's acceptance criteria (R1–R16, plus the panel spec's ACs) only. Do not flag anything outside the stated criteria — no design alternatives, hardening, or scope the spec did not claim."*
 >
 > This **never gates a merge** — the gate stays `bun run check` plus `bun run build`; the review only flags what deserves a second look. If no helper is available, finish the branch without it.

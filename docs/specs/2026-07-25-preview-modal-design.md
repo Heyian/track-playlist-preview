@@ -1,518 +1,514 @@
-# Preview Modal — Design Spec
+# Preview Panel — Design Spec
 
-**Date:** 2026-07-25
-**Status:** Approved for planning
+**Date:** 2026-07-25 · **Revised:** 2026-09-26 (re-grilled on Spotify 1.2.96.518 / Spicetify v3)
+**Status:** Revised — awaiting approval
 **Builds on:** [`2026-07-22-track-playlist-preview-design.md`](2026-07-22-track-playlist-preview-design.md)
-(the shipped extension, PR #4, AC1–AC45) and [ADR 0001](../adr/0001-preview-audio-via-trackpreview-graphql.md).
-This spec **supersedes or retires** AC8, AC13, AC19, AC27, AC33, AC34, AC38, AC39, AC40, AC42 and
-AC45 of that spec — see **Superseded Acceptance Criteria**. Adopting a blocking modal reaches
-further into the shipped criteria than the modal's own surface: it removes the Playbar controls that
-AC8/AC13 assert on, and it covers the UI that AC34/AC42/AC45 and the replacement path (AC19/AC27)
-depend on.
+(the shipped extension, PR #4/#5, AC1–AC45) and [ADR 0001](../adr/0001-preview-audio-via-trackpreview-graphql.md).
+**Folds in:** [`2026-09-26-remove-from-playlist-design.md`](2026-09-26-remove-from-playlist-design.md)
+(R1–R16, approved and critique-revised). R-criteria keep their ids and live in that spec; this spec
+decides the parts it handed over (Undo surface, Remove control).
 
-**Amended by:** [`2026-09-26-remove-from-playlist-design.md`](2026-09-26-remove-from-playlist-design.md): a
-Remove control (R1–R16) to fold into this modal's design and plan.
+> **Filename.** This spec was first written for a blocking `Spicetify.PopupModal` ("preview modal").
+> The 2026-09-26 re-grill replaced it with a non-blocking **preview panel**. The filename is kept so
+> existing links resolve. The original version is in git history (`cd683a1`).
 
 ---
 
 ## Problem
 
-The shipped extension previews tracks with only a Snackbar and two Playbar buttons for feedback and
+The shipped extension previews tracks with only a notice and two Playbar buttons for feedback and
 control. It restored preview *audio* but not the original preview's *surface*: artwork, transport
-controls, the collection you're previewing from, and quick add/remove to your playlists.
+controls, and the collection you're previewing from.
 
-This feature adds a **preview modal** — a focused surface that opens with every preview session,
-shows the current track's artwork and progress, exposes Stop/Next, and lets you add or remove the
-track from playlists using Spotify's **own** playlist picker rather than a hand-built list.
+Previewing a playlist is usually triage: hear each clip, decide whether it stays. This feature adds
+a **preview panel**. The panel opens with every preview session, shows the current track's artwork and
+progress, and exposes Stop, Next and (in an editable playlist) Remove, with keyboard shortcuts. The
+page stays usable underneath it.
 
 ## Terms
 
-Extends the prior spec's **Terms**. Spec-local (no `CONTEXT.md` glossary exists).
+Spec-local (no `CONTEXT.md` glossary exists). Extends the Terms of both related specs.
 
 | Term | Meaning |
 | --- | --- |
-| **Preview modal** | The blocking `Spicetify.PopupModal` auto-opened per preview session, showing artwork, `Title — Artist`, the source collection + position, a progress bar, Stop/Next, and the add-to-playlist affordance. |
-| **Native track menu** | Spotify's own `Spicetify.ReactComponent.TrackMenu`, rendered inside `ReactComponent.ContextMenu`. Its "Add to playlist ▶" submenu is Spotify's real playlist picker (search, checkmarks, "New playlist"). Reused verbatim — we build no playlist list. |
-| **Effective preview window** | `min(configuredDurationMs, clipDurationMs)` — the point at which a normally-completing track advances (from the prior spec's AC14/AC15). The progress bar fills against this. |
-| **Skipping state** | The preview modal's rendering for a `trackSkipped` event: the skipped track's name, artist and `i/N`, a "No preview — skipping" indicator, placeholder artwork, empty progress bar. Distinct from the *playing state* (AC61). |
-| **Foreign takeover** | Any non-preview-modal caller invoking `Spicetify.PopupModal.display` while a session is active. `PopupModal` is a singleton, so this unmounts our content and is handled identically to a user dismissal (AC60). |
+| **Preview panel** | Our own non-blocking React card, mounted once at `<body>` level and docked on the right edge. It shows artwork, `Title — Artist`, the source collection and position, a progress bar, and Stop / Next / Remove. It opens and closes with preview sessions. |
+| **Pending-removals stack** | Our own list docked above the preview panel. It has one row per **pending removal** (remove spec) with an Undo action, and stays on screen while any removal is pending, whether or not the panel is open. |
+| **Effective preview window** | `min(configuredDurationMs, clipDurationMs)`: the point at which a normally-completing track advances (prior spec AC14/AC15). The progress bar fills against this. |
+| **Skipping state** | The panel's rendering for a `trackSkipped` event: the skipped track's name, artist and `i/N`, a "No preview — skipping" indicator, placeholder artwork, empty progress bar. Distinct from the *playing state*. |
+| **Notice** | Spotify's toast (`Spicetify.showNotification`, a notistack Snackbar). Called "Snackbar" in the prior spec. |
 
-_Avoid:_ "player" for the preview modal (it drives no `Spicetify.Player`); "picker" for anything we
-build (the picker is always Spotify's native one).
+_Avoid:_ "modal" or "popup" for the preview panel (it is neither); "player" for the panel (it drives
+no `Spicetify.Player`); "toast" for a pending-removals stack row (it is ours, not Spotify's notice).
 
 ---
 
 ## Investigation Findings
 
-Verified live over the Chrome DevTools Protocol (`127.0.0.1:8088`) on 2026-07-25, plus a
-web/GitHub survey of how existing extensions add tracks to playlists.
+Verified live over CDP (`scripts/cdp-eval.mjs`) on 2026-09-26: Spotify 1.2.96.518, Spicetify v3
+modules, stdlib 1.13.0. These findings replace the 2026-07-25 set, which was taken under v2.
 
-### The native picker cannot be opened standalone — but the native track menu can be reused
+### Why not `Spicetify.PopupModal`
 
-There is **no** Spicetify/Platform API that opens Spotify's standalone "Add to playlist" picker, and
-no extension does it; every add-to-playlist extension hand-rolls a list and calls `PlaylistAPI`
-underneath (adufr/`quick-add-to-playlist`, JimMarley420/`addToPlaylistMulti`,
-huhridge/`listPlaylistsWithSong`).
+The original design used a blocking `PopupModal`. On the current client:
 
-However, Spotify's **whole native track context menu** is reusable. Confirmed live:
+- **Every notice renders underneath an open `PopupModal`.** The notistack container (z 1400) sits
+  inside `Root__top-container` (`position: relative; z-index: 0`), a stacking context below the modal
+  overlay (`GenericModal__overlay`, z 100, full window). Hit tests on a default notice, a custom notice
+  button and `showNotification` all return the overlay. A z-index change on the notice can't escape
+  that stacking context. So Undo (remove spec R11), error notices and failure notices (R15) would all
+  be invisible mid-session.
+- **Escape does not close a `PopupModal`.** Only a backdrop click and the X button close it.
+- **`display()` over an open modal leaks the previous tree.** The singleton re-renders without
+  unmounting, so the old content's effect cleanup never runs.
+- The modal *does* block pointer input to the page, which is what forced the retirements
+  (AC34/AC40/AC42/AC45, reachable replacement) listed in the original version.
 
-- `Spicetify.ReactComponent.TrackMenu` is a live `React.memo` component
-  (`function({canSwitchVisuals, ...t}) { … }`) that forwards props to Spotify's inner track menu.
-- `Spicetify.ReactComponent.ContextMenu` and `RightClickMenu` are live and are the standard way
-  extensions mount a menu as a click/right-click target.
-- Rendering `ContextMenu` with `menu={React.createElement(TrackMenu, { uri, … })}` yields Spotify's
-  real track menu; its "Add to playlist ▶" submenu **is** the native picker.
+A body-level panel avoids all four: the page and notices stay visible, and we own the key handling.
 
-`TrackMenu`'s exact prop set is undocumented (typed `any`). Mirroring Spotify's own invocation
-(minimum `uri`; likely also `uris`, `contextUri`, `reference`) is a **first-task live spike**, as is
-confirming the native menu portals **above** `PopupModal`.
+### Why not Spotify's native track menu (Add to playlist)
 
-### Supporting Platform APIs (all live under `Spicetify.Platform`)
+`Spicetify.ReactComponent.TrackMenu`, `ContextMenu` and `RightClickMenu` exist, but a `TrackMenu`
+mounted in our own React root throws (`Please wrap your component in RemoteConfig Provider`, then
+`useNavigateStable must be used within a StableUseNavigateProvider`, then `RegistryContext`). It
+renders only after harvesting all 82 React context providers from `.main-view-container`'s fiber
+tree and re-wrapping them around it. "Add to playlist" additionally needs `saveTrackUri`, `albumUri`
+and `artists` props. Once working, the menu portals to a body-level tippy root at z 9999, above
+everything. The approach depends on Spotify's internal component tree and was judged too brittle.
+With a non-blocking panel, Spotify's own row menu stays reachable during a session. Add to playlist
+is therefore out of this iteration (see Deferred Items).
 
-Not required for the native-menu path, but recorded because the deferred custom-picker fallback and
-the "which playlists contain this track" affordance would use them:
+### Notice geometry
 
-| Need | Call |
-| --- | --- |
-| Add track to playlist | `PlaylistAPI.add(playlistUri, trackUris, { after })` |
-| Remove track from playlist | `PlaylistAPI.remove(playlistUri, [{ uri, uid }])` — `uid` from `getContents()` |
-| User's playlists/folders | `RootlistAPI.getContents()` |
-| Is track curated into contexts | `CurationAPI.isCurated` / `curateItems` |
-| Collection metadata (label) | `PlaylistAPI.getMetadata(uri)`; album/artist equivalents |
+Notices render bottom-centre (probe at 1909×1143: `x 916–993, y 1079–1101`). A right-edge panel
+does not intersect them at normal window widths. The right sidebar (Now Playing view), when open, is
+the rightmost 420 px. The panel sits over it.
 
-### Album artwork is available at enumeration time
+### Artwork and track metadata paths
 
-Every enumeration source returns items carrying album images (`PlaylistAPI.getContents`,
-`LibraryAPI.getTracks`, artist top-tracks). Artwork therefore rides the existing enumeration — no
-per-track live fetch at play time. **Exact field path is a first-task spike** (the live socket
-dropped mid-investigation before the shape dump completed); the research survey and community type
-defs put it at `item.album.images[]` / `item.albumOfTrack.coverArt`.
+| Source | Artwork field | URL form |
+| --- | --- | --- |
+| `PlaylistAPI.getContents` items (playlist, album) | `item.album.images[]` `{ url, label }`, labels `standard` (300), `small` (64), `large`/`xlarge` (640) | `spotify:image:…` (loads directly in `<img>`) |
+| `LibraryAPI.getTracks({limit, offset})` items (Liked Songs) | `item.album.images[]` (same shape) | `spotify:image:…` |
+| `queryArtistOverview` top tracks | `topTracks.items[].track.albumOfTrack.coverArt.sources[].url` (no size labels) | `https://i.scdn.co/image/…` |
+| `Definitions.getTrack({ uri })` (single track) | `data.trackUnion.albumOfTrack.coverArt.sources[]` `{ url, width, height }` (300/64/640) | `https://i.scdn.co/image/…` |
+
+**Existing bug:** `spotify/fetchTrackRef` asks `trackPreview` for `name`/`artists`, but
+`data.lookup[0].data` holds only `{ previews, uri }`. Single-track previews therefore always show
+the URI's last segment as the title. `getTrack` returns `trackUnion.name` and
+`trackUnion.firstArtist.items[].profile.name`, plus the artwork. Fixed here (AC69) because the panel
+displays that data.
+
+### Icons
+
+`Spicetify.SVGIcons` (100 entries) has `minus`, `block`, `x`, `skip-forward`, `pause`, `check`,
+`check-alt-fill`, `plus2px`, `plus-alt`. It has no `stop` and no trash/remove/delete icon. Markup is
+built as full `<svg>` from `Spicetify.SVGIcons[name]`, never a bare name (`CLAUDE.md`).
+
+### Keyboard
+
+Not verified live (it would modify a playlist): Spotify's desktop app is reported to remove the
+selected tracklist row on `Delete`, immediately. Scoping our shortcuts to panel focus (AC66) avoids
+that clash, as well as clashes with typing in search, so the design holds either way.
 
 ---
 
 ## Architecture
 
-The preview modal is a new `ui/` module that is a **pure consumer of engine events**: it renders a
-view-model and calls back into the controller. It performs no `Spicetify.Player` calls (the
-`playerCoordinator`-only rule holds) and no enumeration. It touches only React, `PopupModal`, and
-the native `ReactComponent` menu — the same class of Spicetify UI globals the other `ui/` modules
-already use.
+The preview panel is a new `ui/` module that is a **pure consumer of controller calls**. It renders
+a view-model and calls back into the controller. It makes no `Spicetify.Player` calls (the
+`playerCoordinator`-only rule holds) and no enumeration. It uses plain React elements only. No
+Spotify internal components means no provider problem.
 
 ### Wiring
 
-`previewController` gains a `modal` port, wired exactly like the existing `playbar`/`highlight`
-ports it replaces:
+`previewController` gains a `panel` port, replacing the `playbar` port it removes:
 
 ```
 beginSession(queue, startIndex, collectionUri)
-  → if queue empty: "Nothing to preview", NO modal   // AC46, prior AC8
-  → resolve collection label once (adapter)
-  → coordinator.acquire()
-  → modal.open(view)              // AC46: auto-open, blocking PopupModal
+  → if queue empty: "Nothing to preview" notice, NO panel      // AC46, prior AC8
+  → resolve collection label + removable flag once (adapters) // AC48, AC64, R1–R3
+  → coordinator.acquire()                                      // no-op on replacement (AC27)
+  → panel.open(view)   (update in place if already open)       // AC46, AC55
   → engine.start(...)
 
-engine emits trackStarted  → modal.update(playingView)   // AC49: update in place
-engine emits trackSkipped  → modal.update(skippingView)  // AC61: no stale track/counter
-engine emits sessionEnded  → modal.close()               // AC55, all reasons
+engine emits trackStarted  → panel.update(playingView); highlight.set(uri)   // AC49, AC39
+engine emits trackSkipped  → panel.update(skippingView)                        // AC61
+engine emits sessionEnded  → reason "replaced": keep panel open (next session updates it)
+                             any other reason:  panel.close(); highlight.clear(); coordinator.release()
 ```
 
-`sessionEnded` has no replacement branch: with a blocking modal there is no reachable way to start a
-second session while one is active (see **Superseded Acceptance Criteria**, AC19/AC27/AC34). The
-engine's `"replaced"` reason and the coordinator's pause-ownership transfer remain implemented and
-unit-tested as engine invariants; the modal simply closes on every `sessionEnded` reason.
-
-Modal callbacks map to existing controller/engine entry points:
+Panel callbacks map to controller entry points:
 
 - `onStop` (Stop button) → `controller.stop()` (AC50)
-- `onClose` (X / backdrop / Esc) → `controller.stop()` (AC51 — close = stop)
-- `onSkip` (Next button) → `engine.skip()` (AC52)
+- `onClose` (✕ button, `Esc`) → `controller.stop()` (AC51, close = stop)
+- `onNext` (Next button, `→`) → `controller.next()` → `engine.skip()` (AC52)
+- `onRemove` (Remove button, `Delete`) → `controller.removeCurrent()` (remove spec R5–R6)
 
-**Close detection.** `Spicetify.PopupModal` exposes no `onClose`; a backdrop/Esc/X dismissal only
-unmounts the rendered content. The modal content therefore carries a React effect whose **cleanup**
-(fired on unmount) invokes `onClose` → `controller.stop()` (AC51). This must be **idempotent and
-re-entrancy-guarded**: a programmatic `modal.close()` (from a `sessionEnded` we initiated, AC55) also
-unmounts the content and would re-enter `stop()`; a single "closing owned by the controller" flag
-distinguishes a controller-driven teardown from every other unmount, so the session is stopped
-exactly once. `engine.stop()` is already a no-op when idle, but the flag is what makes the count
-assertable rather than incidentally safe.
+Because the panel is ours, closing it is an explicit callback, not an unmount side effect. `panel.close()`
+called by the controller never invokes `onClose`, so a session is stopped exactly once (AC51).
 
-**`PopupModal` is a singleton the extension does not own.** There is exactly one modal;
-`PopupModal.display` replaces whatever is showing. `ui/settingsModal` already calls it, and so may
-any other extension. The preview modal therefore holds the singleton for the whole session, which is
-why prior AC42 is rescoped and AC45 retired. A foreign `display()` mid-session unmounts our content
-and is **indistinguishable from a user dismissal** — which is the correct outcome: cleanup fires,
-the session stops exactly once, and Spotify resumes iff it was playing (AC60). The controller-owned
-flag must not swallow this case; only a teardown *we* initiated sets it.
+**Focus.** The panel takes keyboard focus every time a session starts, including a replacement. The
+shortcuts `→`, `Delete`, `Esc` are handled only for key events whose target is inside the panel.
+There they are consumed (`preventDefault` + `stopPropagation`) so Spotify does not also act on them.
+Elsewhere, keys reach Spotify untouched (AC66).
+
+**Layering.** The panel and the pending-removals stack mount in one body-level root. They sit
+above the page and below `PopupModal`'s overlay (z 100), so the settings modal covers them when
+opened mid-session (AC42). They don't intersect the Playbar or the bottom-centre notice area (AC70).
+Styling comes from Spotify's CSS custom properties (e.g. `--background-elevated-base`, `--text-base`,
+`--text-subdued`) and, for buttons, classes read off a live `[data-encore-id="buttonTertiary"]`
+sibling, as `actionBarButton` already does. No `e-NNNNN` class is hardcoded (`CLAUDE.md`).
 
 ### Modules
 
 | Module | Change | Responsibility |
 | --- | --- | --- |
-| `ui/previewModal` | **new** | React component + `open`/`update`/`close` port. Renders the modal content and hosts the native track menu. Pure consumer of a view-model + callbacks. |
-| `types/domain` | change | `TrackRef` gains optional `artworkUrl`. Add the modal view-model type and `ModalPort` interface. **`AudioPort` is declared here**, not in `spotify/ports` — the elapsed/duration accessor widens this interface. |
-| `previewController` | change | Add the `modal` port + its lifecycle; handle `trackSkipped`; suppress the per-track Snackbar; remove the `playbar` and `highlight` wiring. |
-| `previewController.test` | **new** | Does **not** exist today — this is a new file, not an extension of an existing one. |
-| `collections/*`, `spotify/fetchTrackRef` | change | Populate `TrackRef.artworkUrl` from source item images. |
-| `spotify/ports` (`createAudioPort`) | change | Implement the elapsed/duration accessor (interface change lands in `types/domain`). |
-| `spotify/*` (collection label) | **new small adapter** | Resolve a collection URI → display name (`getMetadata` per type; "Liked Songs" constant). |
-| `index.ts` | change | Build the modal + collection-label adapter; wire the `modal` port; drop `playbar`/`highlight`. |
-| `ui/playbarControls` | **removed** | Superseded by the modal's controls (AC57). Only `.ts` exists — **there is no `playbarControls.test.ts`**. |
-| `ui/rowHighlight` (+ `.css`) | **removed** | Occluded by the always-open modal; AC39 removed (AC58). Only `.ts` and `.css` exist — **there is no `rowHighlight.test.ts`**. |
+| `ui/previewPanel.tsx` | **new** | React card + `open`/`update`/`close` port; focus + key handling; hosts the pending-removals stack's render. Plain elements only. First `.tsx` in the repo. |
+| `ui/previewPanel.view.ts` | **new, pure** | `toPanelView(event, label, removable)` → view-model (playing / skipping / single-track). Unit-tested without a DOM. |
+| `ui/pendingRemovalsStack.tsx` | **new** | Renders one row per pending removal with Undo; subscribes to `pendingRemovals`. Mounted independently of the panel's open state. |
+| `pendingRemovals` | **new, pure** | Remove spec. Adds a change subscription (list of pending entries: handle, title, playlist name) for the stack. |
+| `types/domain` | change | `TrackRef.artworkUrl?`; `PanelPort`, panel view-model; `AudioPort` gains an elapsed/duration accessor; remove spec's `RemovePort` and `isExcluded` type. |
+| `previewController` | change | `panel` port lifecycle incl. replacement; `trackSkipped` handling; suppress per-track notice; drop `playbar`; keep `highlight`; add `next()`; add remove spec's removable flag + `removeCurrent()`. |
+| `previewController.test.ts` | **new** | No controller test exists today. |
+| `previewEngine` | change | Remove spec's `isExcluded` dep. The engine never reads the audio elapsed accessor. |
+| `collections/*` | change | Populate `artworkUrl` from the paths in **Investigation Findings**. |
+| `spotify/fetchTrackRef` | change | Switch to `Definitions.getTrack`: real name, artist(s), artwork (AC69). Keep the URI-label fallback. |
+| `spotify/collectionLabel.ts` | **new** | Collection URI → display name (`getMetadata` per type; "Liked Songs" constant), with a generic type-label fallback (AC64). |
+| `spotify/ports` | change | `createAudioPort` implements the elapsed accessor; remove spec's `playlistRemove` and `canRemove`. |
+| `index.ts` | change | Build panel, stack, label adapter and `pendingRemovals`; wire `panel`; drop `playbar`. |
+| `ui/playbarControls.ts` + `.test.ts` | **deleted** | Superseded by the panel (AC57). |
+| `ui/rowHighlight` | unchanged | Kept; AC39 applies again. |
 
-**Purity note.** `AudioPort` is the *pure engine's* port; the progress bar is a UI concern. Adding
-an elapsed/duration accessor to it is a deliberate widening for a non-engine consumer. The engine
-itself must not read it — its advance timing stays driven by `TimerPort` and the `ended` handler, so
-the "`previewEngine` is pure" rule in `CLAUDE.md` is preserved.
+**Purity note.** `AudioPort` is the pure engine's port. Adding an elapsed/duration accessor is a
+deliberate widening for a UI consumer (the progress bar). The engine must not read it. Its advance
+timing stays driven by `TimerPort` and the `ended` handler, preserving the "`previewEngine` is pure"
+rule in `CLAUDE.md`.
 
-**JSX.** `ui/previewModal.tsx` is the repo's first `.tsx`. Verified no config change is needed:
-`tsconfig.json` sets `"jsx": "react"` (classic runtime), so the file must `import React from "react"`
-— which `build.ts` already aliases to `Spicetify.React`. Bun bundles `.tsx` natively.
+**JSX.** `tsconfig.json` sets `"jsx": "react"` (classic runtime), so `.tsx` files
+`import React from "react"`, which `build.ts` aliases to `Spicetify.React`. Bun bundles `.tsx`
+natively.
 
-### Modal contents
+### Panel contents
 
-- Large album artwork (neutral placeholder when `artworkUrl` is absent) · `Title — Artist`.
-- `From: <collection name> · (i/N)`. Single-track session → single-track indicator, no counter.
-- **Stop**, **Next** (disabled on the last queue entry), display-only **progress bar** filling
-  against the effective preview window, reset per track.
-- **Add to playlist** affordance → opens the native track menu for the current track URI.
-- **Skipping state** (AC61) — on `trackSkipped` the modal shows that track's name/artist and its
-  correct `i/N`, with a "No preview — skipping" indicator, dimmed/placeholder artwork and an empty
-  progress bar. Nothing on screen goes stale during a run of unpreviewable tracks.
+```
+┌───────────────────────┐
+│                    ✕  │
+│  ┌─────────────────┐  │
+│  │    artwork      │  │   ~280 px wide, right edge, above the Playbar
+│  └─────────────────┘  │   artwork shrinks on short windows
+│  Title — Artist       │
+│  From: Chill Mix 4/37 │
+│  ▓▓▓▓▓▓░░░░░░░░░░░░   │
+│ [■ Stop][⏭ Next]  [− Remove] │
+└───────────────────────┘
+```
 
-**Progress bar during the inter-track gap.** `gapMs` (prior AC44, default 0, user-configurable) sits
-between tracks. The bar **holds at full** for the gap's duration and resets to empty when the next
-`trackStarted` arrives — it does not empty early, which would read as a stalled preview.
+- Artwork (neutral placeholder when `artworkUrl` is absent), `Title — Artist`.
+- `From: <collection name> · i/N`. Single-track session → single-track indicator, no counter.
+- **Stop**, **Next** (disabled on the last queue entry), display-only **progress bar** against the
+  effective preview window. The bar holds full during `gapMs` and resets when the next track starts.
+- **Remove**: icon (`minus`) + text "Remove", right-aligned apart from Stop/Next, accessible label
+  "Remove from *playlist name*". Present only in a removable session (remove spec R1–R2).
+- **Skipping state** on `trackSkipped` (AC61).
+- **✕** close = stop.
+
+**Pending-removals stack**, directly above the panel: rows `Removed *Title* from *Playlist* · Undo`,
+newest nearest the panel. A row disappears when its removal is undone, commits, or fails (a failure
+then shows the R15 notice). The stack stays at the same anchor when the panel is closed. It has no
+row limit.
 
 ### Behaviour changes vs. the shipped extension
 
-- **Previewing is now a focused, foreground activity.** The modal auto-opens on every session and is
-  a blocking `PopupModal`; browsing other pages while previewing (AC40) is retired. The audio still
-  decouples from the page internally, but the modal is the surface.
-- **Close = stop.** There is no dismiss-without-stopping and no reopen affordance; a closed modal
-  means the session ended.
-- **Per-track Snackbar suppressed** while the modal is shown; the end-of-session summary (AC41)
-  stays.
-- **Playbar Skip/Stop and the row highlight are removed** — both are occluded by the modal and
-  replaced by, or made moot by, it.
-- **Settings become idle-only.** `PopupModal` is a singleton; the preview modal holds it for the
-  session, so the settings modal is reachable only between sessions (prior AC42 rescoped) and
-  mid-session duration changes are gone (prior AC45 retired).
-- **Replacement sessions are no longer user-reachable.** With the action bar and context menus
-  covered, there is no way to start a second session over a running one. The engine and coordinator
-  keep the replacement logic as an invariant (prior AC19/AC27), and prior AC34 is retired.
+- A preview panel opens with every session and closes when it ends (except on replacement, where it
+  updates in place). Close = stop; there is no minimize and no done screen.
+- The page stays usable: browsing (AC40), the action-bar toggle (AC34), context menus (including
+  starting a replacement session, AC19/AC27) and mid-session settings (AC42/AC45) all keep working.
+- Per-track notice (AC38) suppressed while the panel is open. The end-of-session summary (AC41) and
+  error notices stay.
+- Playbar Skip/Stop removed (AC33 superseded by AC57). The row highlight (AC39) stays.
+- Single-track previews show the real title and artist (AC69; fixes the `fetchTrackRef` bug).
 
 ### Error handling
 
 | Condition | Behaviour |
 | --- | --- |
-| `TrackMenu` fails to render / native menu unavailable | The add-to-playlist affordance no-ops with a Snackbar ("Add to playlist unavailable"); the rest of the modal is unaffected. (A custom-picker fallback is a deferred item.) |
-| `artworkUrl` absent for a track | Render a neutral artwork placeholder; no error. |
-| Collection label lookup fails | Show a generic label (e.g. the collection type) rather than failing the session. |
-| Session aborts on API error (prior AC13) | Modal closes as part of `sessionEnded`; the existing abort Snackbar still fires. Note prior AC13's "Playbar controls are deregistered" clause no longer applies (AC57). |
-| Another caller displays a `PopupModal` mid-session | Our content unmounts; cleanup fires and the session stops exactly once, Spotify resuming iff it was playing (AC60). Treated as a user dismissal — we do not fight for the singleton or reopen. |
+| `artworkUrl` absent / image fails to load | Neutral placeholder; no error. |
+| Collection label lookup fails | Generic type label ("Playlist", "Album", "Artist"); session unaffected (AC64). |
+| `getTrack` fails for a single track | URI-label fallback as today; artwork placeholder. |
+| Session aborts on API error (prior AC13) | Panel closes with `sessionEnded`; the abort notice shows. |
+| `canRemove` lookup fails | No Remove control; session unaffected (R3). |
+| Removal commit rejects | Stack row removed; R15 notice. |
 
 ### Testing
 
-Pure logic is unit-tested with **Vitest**, matching the repo's `*.test.ts` convention:
+Vitest, `*.test.ts`:
 
-- `previewController.test` — **a new file**; no controller test exists today. Asserts the `modal`
-  port calls (`open` on session start, **not** opened on an empty queue, `update` on `trackStarted`,
-  `update` with the skipping view on `trackSkipped`, `close` on `sessionEnded` for every reason),
-  that the per-track Snackbar is suppressed, that no `playbar`/`highlight` calls occur, and that a
-  user close and a controller-driven close each stop the session **exactly once** (AC51, AC60).
-- A pure `toModalView` helper (engine event + collection label → view-model) unit-tested directly,
-  covering the playing and skipping states and the single-track indicator.
-- Enumeration adapters — extended to assert `artworkUrl` population.
+- `previewController.test.ts` (**new file**): `panel.open` on session start, not on an empty queue;
+  `update` on `trackStarted` and with the skipping view on `trackSkipped`; `close` on every
+  `sessionEnded` reason except `replaced`; on replacement the panel is updated, not closed; per-track
+  notice suppressed; no Playbar calls; highlight set/cleared; `onClose` stops exactly once and a
+  controller-driven `close` does not call `stop`; plus the remove spec's controller cases.
+- `previewPanel.view.test.ts`: playing, skipping, single-track, removable/not-removable views; Next
+  disabled on last entry.
+- `pendingRemovals.test.ts` (remove spec) plus the change subscription used by the stack.
+- `collections/*.test.ts`: `artworkUrl` from each source path, absent → undefined.
+- `collectionLabel` test: rejected/empty metadata → generic type label.
+- `fetchTrackRef` is a `Spicetify` adapter. Unit-test its pure parsing by extracting a
+  `parseGetTrack(res)` helper.
+- Delete `ui/playbarControls.test.ts` with its module.
 
-**Not unit-testable — manual CDP verification required.** The React component, the native-menu
-reuse, the `PopupModal` z-index/portal behaviour, **the progress bar (AC53)** and **the
-`TrackMenu`-unavailable fallback (AC63)** are verified in the running client via
-`scripts/cdp-eval.mjs`, per the repo's established practice for UI adapters. AC53 is called out
-because the pure `toModalView` test does not reach it: the bar's fill is driven by a sampling loop
-over the audio element's elapsed time, not by a view-model field a unit test can assert.
-
-The **collection-label fallback (AC64)** *is* unit-testable — put the fallback in the label adapter,
-not the component, and assert that a rejected/empty `getMetadata` yields the generic type label.
+**Manual CDP verification** (not unit-testable): the React panel and stack rendering, focus and key
+scoping (AC66), placement/layering (AC70), the progress bar (AC53), and the page staying interactive
+(AC65).
 
 ---
 
 ## Acceptance Criteria
 
-Continue the prior spec's numbering. Session-lifecycle terms are as defined there.
+Ids continue the shipped spec's numbering. Surviving ids from the 2026-07-25 version are kept. New
+ids start at AC65. The remove spec's **R1–R16** apply unchanged and are part of this feature's
+contract. Session-lifecycle terms are as defined in the shipped spec.
 
-**Modal lifecycle**
+**Panel lifecycle**
 
-- **AC46** — On any preview session start (action bar, collection or track context menu, single
-  track, from-here — every collection type), the preview modal opens automatically as a blocking
-  `Spicetify.PopupModal`. Given enumeration yields no eligible tracks, **no modal opens** and the
-  "Nothing to preview" Snackbar shows instead (prior AC8).
-- **AC49** — When the engine advances to the next track, the open modal updates its artwork, name,
+- **AC46**: On any preview session start (action bar, collection or track context menu, single
+  track, *Preview from here*, every collection type), the preview panel opens. Given enumeration
+  yields no eligible tracks, **no panel opens** and the "Nothing to preview" notice shows (prior
+  AC8). No `Spicetify.PopupModal` is used for the preview surface.
+- **AC49**: When the engine advances to the next track, the open panel updates its artwork, name,
   artist, position counter and progress in place, without closing and reopening.
-- **AC55** — When a session terminates by any cause (completed, stopped, aborted, or via the modal's
-  Stop/close), the modal closes. There is no exception: every `sessionEnded` reason closes the modal.
+- **AC55**: When a session ends as `completed`, `stopped` or `aborted`, the panel closes. When a
+  session ends as `replaced` (a new session started from the page), the panel stays open and shows
+  the new session's collection, counter and first track.
+- **AC65**: While the panel is open, the page stays interactive: navigating to another page does not
+  close the panel or interrupt the session. The action bar, context menus and the profile-menu
+  settings entry remain clickable, and each behaves as its shipped criterion states (AC34, AC19/AC27,
+  AC42).
 
-**Modal contents**
+**Panel contents**
 
-- **AC47** — The modal displays the current track's album artwork, name and artist; when
-  `artworkUrl` is absent it shows a neutral placeholder rather than a broken image.
-- **AC48** — Given a collection-backed session, the modal displays the resolved collection name and
+- **AC47**: The panel displays the current track's album artwork, name and artist. When
+  `artworkUrl` is absent or fails to load, it shows a neutral placeholder rather than a broken image.
+- **AC48**: Given a collection-backed session, the panel displays the resolved collection name and
   the one-based position `i/N` (`i` from the engine's index, `N` the preview-queue length). Given a
-  single-track session — started from the track context menu, or from *Preview from here* outside a
-  collection context (prior AC37), where the controller supplies no collection URI — the modal
-  displays the single-track indicator and **neither** a collection name **nor** an `i/N` counter.
-- **AC53** — The modal shows a display-only progress bar reflecting elapsed time against the
-  effective preview window `min(configuredDurationMs, clipDurationMs)`; it reaches full as the track
-  advances, **holds at full for the `gapMs` inter-track gap**, and resets to empty when the next
-  track starts. Verified manually via CDP, not by unit test (see **Testing**).
-- **AC61** — Given the engine emits `trackSkipped` for a track with no available clip, the modal
-  updates to that track's name, artist and one-based `i/N`, shows a "No preview — skipping"
-  indicator with placeholder artwork and an empty progress bar, and does not retain the previously
-  played track's details. Through a run of consecutive skips neither the track details nor the
-  counter go stale.
+  single-track session (track context menu, or *Preview from here* outside a collection context per
+  prior AC37), the panel displays the single-track indicator and **neither** a collection name
+  **nor** an `i/N` counter.
+- **AC53**: The panel shows a display-only progress bar reflecting elapsed time against the
+  effective preview window. It reaches full as the track advances, **holds at full for `gapMs`**,
+  and resets to empty when the next track starts. Verified manually via CDP.
+- **AC61**: Given the engine emits `trackSkipped`, the panel shows that track's name, artist and
+  one-based `i/N`, a "No preview — skipping" indicator, placeholder artwork and an empty progress
+  bar, and none of the previous track's details. Through consecutive skips neither the details nor
+  the counter go stale.
+- **AC68**: In a removable session the panel shows a Remove button with the `minus` icon (full
+  `<svg>` markup from `Spicetify.SVGIcons`) and the visible text "Remove", positioned apart from Stop
+  and Next, with accessible label "Remove from *playlist name*". In a non-removable session no Remove
+  button is rendered (R2).
 
-**Modal controls**
+**Panel controls**
 
-- **AC50** — The modal's Stop control terminates the session: the engine returns to idle, audio
-  halts, and Spotify is resumed iff it was playing before the session started.
-- **AC51** — Closing the modal (close button, backdrop click, or Escape) terminates the session
-  identically to AC50, and does so **exactly once** — the unmount cleanup does not re-enter `stop()`
-  when the close was initiated by the controller.
-- **AC60** — Given a caller other than the preview modal displays a `Spicetify.PopupModal` while a
-  session is active, the session terminates exactly once: preview audio halts, Spotify is resumed
-  iff it was playing before the session started, and the extension neither reopens its modal nor
-  re-enters `stop()`.
-- **AC52** — The modal's Next control advances to the next track immediately (equivalent to the
-  engine's `skip`); it is disabled when the current track is the last entry in the preview queue.
+- **AC50**: The Stop control ends the session: the engine returns to idle, audio halts, and Spotify
+  resumes iff it was playing before the session started.
+- **AC51**: The ✕ control, and `Esc` while focus is inside the panel, end the session identically to
+  AC50, calling `controller.stop()` exactly once. A controller-driven `panel.close()` never calls
+  `controller.stop()`.
+- **AC52**: The Next control advances to the next track immediately (the engine's `skip`). It is
+  disabled when the current track is the last entry in the preview queue.
+- **AC66**: When a session starts (including a replacement), the panel receives keyboard focus.
+  While focus is inside the panel, `→` acts as Next (AC52, no-op when disabled), `Delete` acts as
+  Remove (R6; no-op per R5 in a non-removable session) and `Esc` acts as close (AC51). Each such
+  event is consumed and does not reach Spotify's own handlers. Given focus is outside the panel,
+  those keys trigger no panel action and reach Spotify unchanged.
 
-**Add to playlist (native)**
+**Pending removals**
 
-- **AC54** — The modal exposes an "Add to playlist" affordance that opens Spotify's native track
-  context menu (`ReactComponent.ContextMenu` hosting `ReactComponent.TrackMenu`) for the **current**
-  track's URI, and that menu renders visibly above the open `PopupModal` rather than behind it.
-- **AC62** — The native menu's "Add to playlist" submenu adds the current track to a playlist
-  selected there, and removes it from a playlist it already belongs to, with the change reflected in
-  that playlist. The submenu's own search and "New playlist" entries are Spotify's and function
-  unmodified.
-- **AC63** — Given `ReactComponent.TrackMenu` is unavailable or throws while rendering, the
-  add-to-playlist affordance no-ops and an "Add to playlist unavailable" Snackbar is shown; the
-  modal remains open and every other control (Stop, Next, progress, artwork) continues to work, and
-  the session is not terminated.
+- **AC67**: Each pending removal (remove spec) is shown as one row in the pending-removals stack
+  with the track title, source playlist name and an Undo action. The row stays visible and its
+  Undo usable until the commit call is issued, regardless of how many removals are pending and
+  whether the panel is open. Using Undo is R11's undo. The row disappears when the removal is
+  undone, commits, or fails (failure also shows R15's notice). With no pending removals, the stack
+  renders nothing.
 
-_Design constraint, verified by code review rather than test: this extension renders no playlist
-list of its own. See `CLAUDE.md`._
+**Placement**
+
+- **AC70**: At a window of at least 1280×800, the panel and the pending-removals stack sit on the
+  right edge. Their bounding boxes don't intersect the Playbar or the notice container's area, and
+  they render above page content and below `Spicetify.PopupModal`'s overlay. No `e-[0-9]` class
+  literal appears in `src/` (grep).
 
 **Data**
 
-- **AC59** — For each enumeration source (`PlaylistAPI.getContents`, `LibraryAPI.getTracks`, artist
-  top-tracks) and for single-track fetch, cover art is read from the field path resolved by spike
-  (c). Given that field holds URL `U`, the produced `TrackRef.artworkUrl` equals `U`; given the
-  field is absent, `artworkUrl` is undefined and the modal renders the placeholder (AC47). Spike (c)
-  fills in the path per source; the shape of this assertion does not change.
-- **AC64** — Given the collection-label lookup fails or returns no name, the modal displays a
-  generic label derived from the collection type (e.g. "Playlist", "Album", "Artist") in place of
-  the resolved name, and the session starts and runs normally — a label failure never aborts a
-  session nor blocks the modal from opening.
+- **AC59**: For each source in **Investigation Findings → Artwork and track metadata paths**, given
+  the listed field holds URL `U` (for labelled `album.images[]`, the `standard` entry, else the
+  first), the produced `TrackRef.artworkUrl` equals `U`. Given the field is absent,
+  `artworkUrl` is undefined.
+- **AC64**: Given the collection-label lookup fails or returns no name, the panel displays a
+  generic label from the collection type ("Playlist", "Album", "Artist") and the session starts and
+  runs normally.
+- **AC69**: Given a single-track session for a track whose `getTrack` lookup succeeds, the produced
+  `TrackRef` carries that track's real name, its artist name(s) joined by ", ", and its artwork URL.
+  Given the lookup fails, the name falls back to the URI's last segment and the artist to empty, and
+  the session still starts.
 
-**Superseded / removed (see next section) — restated as pass/fail**
+**Superseded / removed**
 
-- **AC56** — While the preview modal is displayed, the per-track "`Title — Artist (i/N)`" Snackbar
-  (former AC38) is **not** shown; the end-of-session summary Snackbar (AC41) is unchanged.
-- **AC57** — No Playbar Skip/Stop buttons are registered for a preview session (superseding AC33);
-  session controls exist only in the modal.
-- **AC58** — No collection-page row highlight is applied for a preview session; `ui/rowHighlight`
-  (and its CSS/test) is removed and unreferenced (removing AC39).
+- **AC56**: While the panel is open, the per-track "`Title — Artist (i/N)`" notice (former AC38) is
+  **not** shown. The end-of-session summary (AC41) and error notices are unchanged.
+- **AC57**: No Playbar buttons are registered for a preview session (superseding AC33).
+  `ui/playbarControls.ts` and `ui/playbarControls.test.ts` are deleted and unreferenced.
 
-## Superseded Acceptance Criteria
+**Withdrawn ids** (not reused): AC54, AC62, AC63 (native track menu; Add to playlist deferred);
+AC58 (row highlight kept); AC60 (no `PopupModal` takeover exists).
+
+## Changes to the Shipped Spec's Criteria
 
 From `2026-07-22-track-playlist-preview-design.md`:
 
-**Directly replaced by this spec's modal criteria**
+- **Superseded:** AC33 → AC57 (panel controls, no Playbar buttons). AC38 → AC56 (per-track notice
+  suppressed while the panel is open).
+- **Amended:** AC8 and AC13: the "Playbar controls are (de)registered" clauses are struck. AC8 also
+  gains "no panel opens" (AC46). Under AC13 the panel closes with `sessionEnded` (AC55).
+- **Unchanged, and reachable again:** AC19, AC27, AC34, AC39, AC40, AC42, AC45. The original
+  version of this spec retired or rescoped these because of the blocking modal. The panel makes that
+  unnecessary.
 
-- **AC33** (Playbar Skip/Stop registered while active) → superseded by **AC57** (no Playbar
-  controls; controls live in the modal).
-- **AC38** (per-track Snackbar on each preview start) → superseded by **AC56** (suppressed while the
-  modal is shown).
-- **AC39** (current-track row highlight) → **removed** by **AC58** (occluded by the modal;
-  `ui/rowHighlight` deleted).
-- **AC40** (session keeps playing while browsing other pages) → superseded: previewing is a focused,
-  blocking-modal activity; browse-while-previewing is no longer a goal. Audio still decouples from
-  the page internally, but the blocking modal is the surface.
-
-**Amended — clauses invalidated by removing the Playbar controls (AC57)**
-
-- **AC8** — the "…and no Playbar controls are registered" clause is **struck**. The rest stands:
-  given no eligible tracks, a "Nothing to preview" Snackbar shows, no session starts, Spotify is not
-  paused, no audio plays — and, added here, no modal opens (AC46).
-- **AC13** — the "Playbar controls are deregistered" clause is **struck**. The rest stands: the
-  session aborts, audio halts, the API-error Snackbar shows, Spotify is resumed iff it was playing.
-  The modal closes as part of `sessionEnded` (AC55).
-
-**Retired as unreachable — the blocking modal covers their trigger**
-
-- **AC34** (action-bar click during an active session on the same collection terminates it) →
-  **retired**. The modal covers the action bar, so this has no reachable trigger. The controller's
-  `toggleCollection` behaviour remains implemented; only the user-facing criterion is withdrawn.
-- **AC19** (starting a session while one is active terminates the first) and **AC27** (replacement
-  transfers pause ownership; no second pause, no resume at the moment of replacement) → **restated
-  as engine-level invariants**. Both remain enforced in `previewEngine`/`playerCoordinator` and
-  verified by their existing unit tests, but neither is claimed as user-reachable behaviour while
-  the blocking modal is open. AC55 accordingly has no replacement branch.
-- **AC45** (changing duration mid-session applies from the next track, without interrupting the
-  current one) → **retired**. The settings modal is unreachable mid-session: `PopupModal` is a
-  singleton the preview modal holds for the session's duration.
-
-**Rescoped**
-
-- **AC42** (settings modal reachable from a `Spicetify.Menu.Item` in the profile dropdown) → holds
-  **while no session is active**. Its content requirements — duration, inter-track gap, one toggle
-  per collection type — are unchanged.
-
-AC1–AC7, AC9–AC12, AC14–AC18, AC20–AC26, AC28–AC32, AC35–AC37, AC41, AC43 and AC44 are unchanged.
+All other shipped criteria are unchanged.
 
 ## Deferred Items
 
-Recorded here as **UNFILED** — the user prefers to open tracker issues themselves. Not yet filed
-against `Heyian/track-playlist-preview`:
+Recorded as **UNFILED**: the user files tracker issues themselves. Not yet filed against
+`Heyian/track-playlist-preview`:
 
-- **UNFILED** — Settings toggle to disable the preview modal (restoring the Playbar-only,
-  browse-while-previewing flow / AC40).
-- **UNFILED** — Custom compact playlist picker as a fallback if the native `TrackMenu` stops
-  rendering on a future Spotify version (RootlistAPI + PlaylistAPI + CurationAPI; the
-  add/remove/contains APIs are recorded under Investigation Findings).
-- **UNFILED** — Restore mid-session duration tuning (prior AC45), lost because `PopupModal` is a
-  singleton the preview modal holds for the session. Most likely shape: a duration control inside
-  the preview modal. Considered and rejected for this iteration — it would make the modal a settings
-  writer rather than a pure consumer of engine events.
-- **UNFILED** — Non-blocking preview surface (a custom overlay panel instead of `PopupModal`), which
-  would reinstate prior AC34, AC40, AC42-mid-session, AC45 and the reachable replacement path in one
-  move. Considered and rejected for this iteration: it abandons native modal fidelity and adds its
-  own z-index contest with the native `TrackMenu`.
+- **UNFILED**: Add to playlist from the preview panel.
+  - *Context:* dropped from this iteration (see Investigation Findings: the native `TrackMenu` needs
+    82 harvested React providers). Spotify's own row menu stays reachable during a session.
+  - *Required:* either the native menu via provider harvesting behind a failure fallback, or a
+    hand-built compact picker (`RootlistAPI.getContents` + `PlaylistAPI.add`, editable playlists only,
+    with search).
+  - *Integration points:* `ui/previewPanel`, `spotify/ports`, a new picker module.
+  - *Priority:* medium. Revisit after the panel ships.
+- **UNFILED**: Un-like from Liked Songs (recorded in the remove spec).
 
-Explicitly **not deferred** at the user's direction (they will file issues later if wanted):
-pause/resume of the current clip, a Previous control, and a seekable progress bar.
+Dropped from the original version's list (now moot): settings toggle to disable the modal (the
+Playbar-only flow it restored no longer exists); non-blocking surface (done); restore mid-session
+duration tuning (AC45 applies again); custom picker as a fallback for the native menu (folded into
+the Add-to-playlist item above).
 
-Row-highlight cleanup is **not** deferred — it is in scope for this spec (AC58).
+Explicitly not deferred (user's direction, unchanged): pause/resume of the current clip, a Previous
+control, a seekable progress bar, a done screen at session end.
 
 ## Glossary Updates & ADRs
 
-**Glossary:** no `CONTEXT.md` exists; spec-local terms are in **Terms**.
+**Glossary:** no `CONTEXT.md`. Spec-local terms changed: **Preview modal → Preview panel** (renamed;
+"modal" added to _Avoid_). Added **Pending-removals stack** and **Notice**. Removed **Native track
+menu** and **Foreign takeover** (no longer part of the design).
 
-**ADRs — decided here, file to be created by Required Task 3** (not yet written; `docs/adr/` holds
-only 0001):
-
-- `docs/adr/0002-preview-modal-native-trackmenu.md` — the preview experience becomes a focused,
-  blocking native modal, and add/remove-to-playlist reuses Spotify's native `TrackMenu` rather than
-  a hand-built picker. Meets the three-criteria gate: hard to reverse (binds to an undocumented
-  Spotify component and retires shipped capabilities), surprising without context (a future reader
-  will ask why the whole native menu is reused, and why choosing a blocking `PopupModal` cascaded
-  into retiring AC34, AC45 and the AC19/AC27 replacement path), and a real trade-off (native
-  fidelity vs. version fragility; focused modal vs. browse-while-previewing and mid-session
-  settings). The ADR must record the `PopupModal`-is-a-singleton finding — it is the reason the
-  settings criteria moved, and it is not obvious from the API surface.
-
-**ADR conflicts surfaced:** none in `docs/adr/` (0001 is unrelated). This spec does supersede
-shipped **acceptance criteria** (AC33/38/39/40) — recorded under **Superseded Acceptance Criteria**
-and reflected back into the prior spec (see Documentation Updates).
+**ADRs: none.** The original version planned `0002-preview-modal-native-trackmenu.md`. It is
+cancelled: the panel lives in one UI module and restores rather than retires shipped criteria, so it
+fails the hard-to-reverse criterion. The reasons for not using `PopupModal` or the native menu are
+recorded in **Investigation Findings**. No conflict with ADR 0001.
 
 ---
 
 ## Config & Infrastructure Impact
 
-Scanned: containers (none), CI/CD (none — no `.github/workflows`), IaC (none), env config (none —
-no env vars introduced), schemas (none), scripts, API collections (none), agent index.
+Scanned: containers (none), CI/CD (none — no `.github/workflows`), IaC (none), env config (no env
+vars), schemas (none), scripts (`scripts/cdp-eval.mjs` unchanged), API collections (none), settings
+(no new key: `UNDO_WINDOW_MS` is a constant), build (`build.ts` unchanged; `.tsx` needs no config).
 
 | File | Change needed |
 | --- | --- |
-| `src/types/domain.ts` | Add `artworkUrl?: string` to `TrackRef`; add the modal view-model type and `ModalPort` interface; add the elapsed/duration accessor to `AudioPort` (declared here, not in `ports.ts`). |
-| `src/ui/previewModal.tsx` | **New.** React modal component + `open`/`update`/`close` port; hosts the native track menu. First `.tsx` in the repo — no tsconfig/build change needed (`"jsx": "react"` already set). |
-| `src/previewController.ts` | Add `modal` port + lifecycle; handle `trackSkipped`; suppress per-track Snackbar; remove `playbar`/`highlight` wiring. |
-| `src/previewController.test.ts` | **New file** — no controller test exists today. Covers the modal-port calls, skip handling, and stop-exactly-once (AC51/AC60). |
-| `src/ui/previewModal.view.ts` + `.test.ts` (or equivalent) | **New.** The pure `toModalView` helper and its unit test, kept out of the `.tsx` so it is testable without a DOM. |
-| `src/spotify/collectionLabel.ts` (or fold into an existing adapter) | **New small adapter.** Collection URI → display name. |
-| `src/spotify/ports.ts` | `createAudioPort` implements the elapsed/duration accessor for the progress bar. |
-| `src/spotify/fetchTrackRef.ts` | Populate `artworkUrl`. |
-| `src/collections/*.ts` | Populate `artworkUrl` from source item images. |
-| `src/index.ts` | Wire the modal + collection-label adapter; drop `playbar`/`highlight`. |
-| `src/ui/playbarControls.ts` | **Delete** (AC57). This file only — **no `playbarControls.test.ts` exists**; do not add a task to delete one. |
-| `src/ui/rowHighlight.ts`, `src/ui/rowHighlight.css` | **Delete** (AC58). These two only — **no `rowHighlight.test.ts` exists**; do not add a task to delete one. |
-| `docs/adr/0002-preview-modal-native-trackmenu.md` | **New** ADR. |
-| `CLAUDE.md` | See Documentation Updates. |
-| `README.md` | See Documentation Updates. |
-| `docs/specs/2026-07-22-…-design.md` | Mark AC33/38/39/40 superseded, pointer to this spec. |
+| `src/types/domain.ts` | `TrackRef.artworkUrl?`; `PanelPort` + view-model; `AudioPort` elapsed accessor; `RemovePort`, `isExcluded` (remove spec). |
+| `src/ui/previewPanel.tsx` | **New.** |
+| `src/ui/previewPanel.view.ts` + `.test.ts` | **New.** Pure view-model helper. |
+| `src/ui/pendingRemovalsStack.tsx` | **New.** |
+| `src/pendingRemovals.ts` + `.test.ts` | **New** (remove spec), plus change subscription. |
+| `src/previewController.ts` | Panel port, replacement branch, `next()`, suppress per-track notice, drop `playbar`, remove-spec additions. |
+| `src/previewController.test.ts` | **New.** |
+| `src/previewEngine.ts` + `.test.ts` | `isExcluded` (remove spec). |
+| `src/collections/playlist.ts`, `likedSongs.ts`, `artist.ts` (+ tests) | Populate `artworkUrl`. |
+| `src/spotify/fetchTrackRef.ts` | Switch to `getTrack`; extract a tested `parseGetTrack`. |
+| `src/spotify/collectionLabel.ts` (+ test) | **New.** |
+| `src/spotify/ports.ts` | Audio elapsed accessor; `playlistRemove`, `canRemove`. |
+| `src/index.ts` | Wire panel, stack, label adapter, `pendingRemovals`; drop `playbar`. |
+| `src/ui/playbarControls.ts`, `src/ui/playbarControls.test.ts` | **Delete.** |
+| `README.md`, `CLAUDE.md`, `docs/specs/2026-07-22-…` | See Documentation Updates. |
 
-No new environment variables. No new settings key in this iteration (the modal-disable toggle is a
-deferred item).
+## Manual Operator Steps
+
+None. No credentials, consoles or cutovers. The live spikes are agent-runnable over CDP.
 
 ## Documentation Updates
 
 | Doc | Change |
 | --- | --- |
-| `CLAUDE.md` | Add a `ui/previewModal` pointer row; add a one-line non-obvious constraint — *reuse `Spicetify.ReactComponent.TrackMenu` via `ContextMenu`; never hand-build a playlist picker, never hardcode menu class names*; note that previewing is now a blocking-modal activity (AC40 retired) and that `playbarControls`/`rowHighlight` were removed. Keep the index ≤300 lines. |
-| `README.md` | Document the preview modal: artwork + Stop/Next + progress, and add/remove to playlists via Spotify's own menu. Note the behaviour change (previewing is a focused modal; closing stops). |
-| `docs/specs/2026-07-22-…-design.md` | Back-annotate **every** affected criterion, not just the four originally listed: AC33/AC38/AC39/AC40 superseded or removed; AC8/AC13 amended (Playbar clause struck); AC34/AC45 retired; AC19/AC27 restated as engine-level invariants; AC42 rescoped to "while idle". Each gets a pointer to `2026-07-25-preview-modal-design.md`. |
-| `docs/adr/0002-…` | Created by this design. |
+| `CLAUDE.md` | Architecture line: add `ui/previewPanel` and `pendingRemovals`. Add one non-obvious constraint: *never use `Spicetify.PopupModal` for an in-session surface; notices render beneath it (see the panel spec).* Keep the index ≤300 lines. |
+| `README.md` | Document the preview panel (artwork, Stop/Next/Remove, shortcuts, Undo stack; Remove on editable playlists only) and the removal of the Playbar buttons. |
+| `docs/specs/2026-07-22-…-design.md` | Back-annotate AC33/AC38 (superseded, pointer to AC57/AC56) and AC8/AC13 (Playbar clause struck), each pointing here. |
+| `docs/specs/2026-09-26-remove-from-playlist-design.md` | Done with this revision: handed-over decisions recorded, "preview modal" → "preview panel". |
 
 ---
 
 ## Implementation Plan Guidance
 
+One plan covers this spec **and** the remove spec (R1–R16). The plan must include every file in
+both specs' Config & Infrastructure Impact tables and the spikes below.
+
+**Live spikes first** (via `scripts/cdp-eval.mjs`; run node with the Bash sandbox disabled, since
+fetch to `127.0.0.1:8088` fails inside it):
+
+- (p1) Mount a plain React tree in a body-level root with `Spicetify.ReactDOM` (confirm `createRoot`
+  vs. legacy `render` under v3). Confirm it renders above page content and below an open
+  `PopupModal` overlay, and that `elementFromPoint` over the page outside the panel still returns
+  page elements (AC65, AC70). Remove it in a `finally`.
+- (p2) Confirm the CSS custom properties the panel will use resolve on `:root` (e.g.
+  `--background-elevated-base`, `--text-base`, `--text-subdued`). Confirm the Playbar's and notice
+  container's live bounding boxes for AC70.
+- (p3) Confirm `Spicetify.GraphQL.Definitions.getTrack` resolves name, artists and cover art for a
+  track URI (AC69).
+- (r1) From the remove spec: URI-form `PlaylistAPI.remove` removes all duplicates. Use a throwaway
+  playlist the agent creates and deletes. Never touch a user playlist.
+
+The remove spec's spike (r2) is superseded: the Undo surface is our own stack, covered by p1.
+If p1 shows a body-level root can't sit above the page or can't receive focus/keys, STOP and raise
+it: the panel decision depends on it.
+
 > **For the plan author (`superpowers:writing-plans`):**
 >
-> Read the repo's agent index (`CLAUDE.md`) first for architecture, commands and conventions.
-> The plan must include the Required Tasks below and apply every Per-Task Policy to every task.
+> Before writing tasks, read the repo's agent index (`CLAUDE.md`/`AGENTS.md`) for architecture, commands, and conventions.
 >
-> ### Required Tasks
+> The plan must include the tasks described under **Required Tasks** below, AND must apply every rule under **Per-Task Policies** to every implementation task.
 >
-> 1. **Isolated workspace** — IF the session is not already isolated, first task:
->    *"Create an isolated workspace via `superpowers:using-git-worktrees`."* (This session is already
->    in a worktree — skip if so.)
-> 2. **Live spikes first** — before building the modal, add explicit spike tasks:
->    (a) *"Confirm `Spicetify.ReactComponent.TrackMenu`'s prop set and that it renders inside a
->    custom React tree, mounted via `ReactComponent.ContextMenu`, on the live client."*
->    (b) *"Confirm the native track menu portals **above** an open `Spicetify.PopupModal`
->    (z-index/portal)."*
->    (c) *"Confirm the album-artwork field path on `PlaylistAPI.getContents`, `LibraryAPI.getTracks`
->    and artist top-tracks items."* Then **rewrite AC59 to name the resolved path** — it is not
->    independently testable until that lands.
->    (d) *"Confirm an open `Spicetify.PopupModal` actually blocks pointer interaction with the action
->    bar and the collection/track context menus."*
->    Use `scripts/cdp-eval.mjs` against the running client. If (a) or (b) fails, STOP and raise it —
->    the native-menu decision (AC54/AC62) depends on them and the user chose native-only.
->    If **(d)** shows the modal does **not** block, STOP and raise it: the retirement of prior AC34,
->    AC45 and the AC19/AC27 replacement path (see **Superseded Acceptance Criteria**) is premised on
->    it blocking, and those criteria would need reinstating instead.
-> 3. **ADR creation** — *"Create `docs/adr/0002-preview-modal-native-trackmenu.md` (sequential
->    numbering)."*
-> 4. **Config file tasks** — one task per file in **Config & Infrastructure Impact**, including the
->    two **deletions** (`ui/playbarControls*`, `ui/rowHighlight*`) and their un-wiring in `index.ts`.
-> 5. **Docs update tasks** — one task per **Documentation Updates** row (CLAUDE.md pointer/constraint,
->    README, back-annotate the 2026-07-22 spec). Design content stays in the docs dir; the index gets
->    at most a pointer row + a one-line constraint.
-> 6. **Deferred items** — the two deferred items are **UNFILED** by user preference; add a task to
->    *"Confirm with the user whether to file the two UNFILED deferred items as issues before finishing
->    the branch,"* not to auto-file them.
-> 7. **Post-implementation check** — second-to-last task: *"Verify every Required Task ran — files
->    added AND deleted, docs written, ADR created — by reading the diff, not the plan markings."*
-> 8. **Final build task** — last task: *"Run `bun run build` and fix until it builds."* Non-negotiable.
+> ---
 >
-> ### Per-Task Policies (apply to every task)
+> ### Required Tasks (each item produces explicit numbered tasks in the plan)
 >
-> - **Testing (TDD)** — `superpowers:test-driven-development`, using Vitest and `*.test.ts`. Test the
->   pure view-model helper and the controller's modal-port calls; the React component + native menu
->   are manually verified via CDP.
-> - **Verification before completion** — `superpowers:verification-before-completion`. Do not rely on
->   type-checks alone for the modal, the native menu, or the deletions.
-> - **Commit hygiene** — one focused commit per task, matching this repo's commit-message style.
-> - **Pre-commit verification (mandatory)** — before EVERY `git commit`, dispatch a verification
->   subagent that runs `bun run check` from the repo root and reports `STATUS: PASS`/`FAIL` with a
->   terse per-issue list. Wait for PASS. Never `git commit --no-verify`.
+> 1. **Isolated workspace** — IF the session is not already isolated, add as the first task: *"Create an isolated workspace via `superpowers:using-git-worktrees`."*
+> 2. **Glossary application** — *Dropped: this repo has no `CONTEXT.md` glossary; terms are spec-local. Code must still use "panel", never "modal", for the preview surface.*
+> 3. **ADR creation** — *Dropped: this spec creates no ADR (the planned ADR 0002 is cancelled) and surfaces no ADR conflict.*
+> 4. **Deferred-item verification** — Add a task: *"Confirm every issue referenced in the 'Deferred Items' section exists and has all four required body sections (Context, Required, Integration Points, Priority)."* Run `gh issue view <#> --json body | jq -r .body` and grep for the four headings. Both items here are UNFILED by the user's choice: instead, *ask the user whether to file them before finishing the branch*; never auto-file.
+> 5. **Config file tasks** — FOR EACH file listed in the spec's "Config & Infrastructure Impact" section, add one explicit task: *"Update `<path>`."*
+> 6. **Manual Operator Steps** — *Dropped: none.*
+> 7. **Docs update tasks** — FOR EACH entry in the spec's "Documentation Updates" section, add one explicit task: *"Update `<doc-path>`."* Design content goes in the docs dir, not the agent index; the index gets at most a 1-line pointer, a ≤3-sentence area summary, or a 1-line command/env-var entry.
+> 8. **Post-implementation check** — Add as the second-to-last task: *"Verify every Required Task above was actually executed — config files updated, docs written, glossary entries applied, ADRs created."* Read the diff; don't trust plan markings.
+> 9. **Final build task** — Add as the last task: *"Run `bun run build` and fix any issues until it builds successfully."* Non-negotiable — type-checks and tests alone do not catch all build-time failures.
+>
+> ---
+>
+> ### Per-Task Policies (apply to every implementation task)
+>
+> These are not separate tasks; they are rules every task must follow.
+>
+> - **Testing (TDD)** — Follow `superpowers:test-driven-development`, using the repo's test runner and file-name conventions.
+> - **Verification before completion** — Before claiming a task done, invoke `superpowers:verification-before-completion`. Do not rely on type-checks alone for UI features.
+> - **Commit hygiene** — One focused commit per task, matching the commit-message convention visible in this repo's history. Commit frequently.
+> - **Pre-commit verification (mandatory)** — Before EVERY `git commit`, dispatch a verification subagent that runs `bun run check` from the repo root and reports `STATUS: PASS` or `STATUS: FAIL` with a terse per-issue list (no raw output). Wait for `STATUS: PASS` before committing; if FAIL, fix in the current task and re-run. Never use `git commit --no-verify`.
+>
+> ---
 >
 > ### Before finishing the branch (advisory cross-model review)
 >
-> After the final build passes — and before `superpowers:finishing-a-development-branch` — if a
-> cross-model review helper is available, run it focused: *"Judge correctness against this spec's new
-> acceptance criteria (AC46–AC59) and the superseded-AC changes only. Do not flag anything outside
-> the stated criteria."* This never gates the merge; the gate stays `bun run check` + `bun run build`.
-
-**Note:** `bun run check` (typecheck + tests) is the whole quality gate — no linter. A green
-`bun run build` does not prove types; run `bun run check` too.
+> After the final build passes — and before wrapping up via `superpowers:finishing-a-development-branch` — if a cross-model review helper is available (e.g. the Codex plugin's adversarial review), run it with focus: *"Judge correctness against the spec's acceptance criteria (AC46–AC70 as listed in the preview-panel spec, the shipped-spec changes it lists, and R1–R16 of the remove spec) only. Do not flag anything outside the stated criteria — no design alternatives, hardening, or scope the spec did not claim."*
+>
+> This **never gates a merge** — the gate stays `bun run check` plus `bun run build`; the review only flags what deserves a second look. If no helper is available, finish the branch without it.
