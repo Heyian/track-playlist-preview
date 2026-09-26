@@ -1,11 +1,12 @@
 // build.ts — bundles this extension for Spicetify using Bun's bundler.
 //
-//   bun run build         → build into the Spicetify Extensions folder
+//   bun run build         → build into the Spicetify v3 modules folder
 //   bun run build:local   → build into ./dist, minified, without installing
 //   bun run watch         → rebuild on change
 //
-// Spicetify extensions are a single JS file dropped into the Extensions folder.
-// This script reproduces the three things that requires:
+// A Spicetify v3 module is a folder `<modules>/<id>/` holding the entry script
+// and a `metadata.json`. Run `spicetify apply` after building to stage it.
+// This script reproduces the three things the entry script needs:
 //
 //   1. `react` / `react-dom` resolve to Spotify's own copies on the `Spicetify`
 //      global rather than being bundled — two React instances in one page break
@@ -16,7 +17,8 @@
 
 import { existsSync } from "node:fs";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { BunPlugin } from "bun";
 
 const NAME = "track-playlist-preview";
@@ -42,14 +44,44 @@ const spicetifyReact: BunPlugin = {
   },
 };
 
-/** The Spicetify Extensions folder, per the local Spicetify config. */
-async function extensionsDir(): Promise<string> {
-  const proc = Bun.spawn(["spicetify", "-c"], { stdout: "pipe", stderr: "pipe" });
-  const out = (await new Response(proc.stdout).text()).trim();
-  if ((await proc.exited) !== 0 || !out) {
-    throw new Error("Could not locate Spicetify. Is `spicetify` on your PATH?");
+/**
+ * The Spicetify v3 modules folder. `spicetify path` reports it only as a log
+ * line (`INFO modules: <dir>`), so parse that and fall back to the XDG default
+ * if the format changes or the CLI is missing.
+ */
+async function modulesDir(): Promise<string> {
+  const fallback = join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "spicetify", "modules");
+  try {
+    const proc = Bun.spawn(["spicetify", "path"], { stdout: "pipe", stderr: "pipe" });
+    const [out, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+    await proc.exited;
+    const plain = (out + err).replace(/\x1b\[[0-9;]*m/g, "");
+    const match = /^\s*INFO\s+modules:\s+(.+?)\s*$/m.exec(plain);
+    if (match?.[1]) return match[1];
+  } catch {
+    // spicetify not on PATH
   }
-  return join(dirname(out), "Extensions");
+  console.warn(`Could not read the modules folder from \`spicetify path\`; using ${fallback}`);
+  return fallback;
+}
+
+/** v3 module metadata, derived from package.json so the version stays in sync. */
+async function metadata(): Promise<string> {
+  const pkg = await Bun.file("package.json").json();
+  return `${JSON.stringify(
+    {
+      name: NAME,
+      version: pkg.version,
+      authors: [pkg.author],
+      description: pkg.description,
+      tags: [],
+      entries: { js: "index.js" },
+      hasMixins: false,
+      dependencies: {},
+    },
+    null,
+    2,
+  )}\n`;
 }
 
 async function build(outDir: string, minify: boolean): Promise<void> {
@@ -100,8 +132,9 @@ ${js}
 `;
 
   await mkdir(outDir, { recursive: true });
-  const outFile = join(outDir, `${NAME}.js`);
+  const outFile = join(outDir, "index.js");
   await writeFile(outFile, bundle);
+  await writeFile(join(outDir, "metadata.json"), await metadata());
   await rm(tmp, { recursive: true });
 
   const kb = (Bun.stringWidth(bundle) / 1024).toFixed(1);
@@ -110,7 +143,7 @@ ${js}
 
 const args = new Set(Bun.argv.slice(2));
 const local = args.has("--local");
-const outDir = local ? "dist" : await extensionsDir();
+const outDir = join(local ? "dist" : await modulesDir(), NAME);
 const minify = local || args.has("--minify");
 
 await build(outDir, minify);
