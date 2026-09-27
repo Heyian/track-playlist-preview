@@ -1,12 +1,18 @@
 // src/ui/settingsSection.tsx
-// This module's section on the Spicetify Settings page (S5, S6, S9, S15).
+// This module's section on the Spicetify Settings page (S5, S6, S9, S15; Panel position P3).
 // The only file that imports stdlib (S16); its items unload with the registrar.
 import React from "react";
 import { createRegistrar, type ModuleRuntimeContext } from "/modules/stdlib/mod.js";
-import { SettingsSection, SettingsTextInputRow, SettingsToggleRow } from "/modules/stdlib/lib/primitives.js";
+import {
+  Select,
+  SettingsRow,
+  SettingsSection,
+  SettingsTextInputRow,
+  SettingsToggleRow,
+} from "/modules/stdlib/lib/primitives.js";
 import { MIN_DURATION_MS, type Settings } from "../settings";
 import type { CollectionType } from "../types/domain";
-import { formatSeconds, parseSeconds } from "./settingsSection.view";
+import { formatSeconds, parseSeconds, PANEL_POSITION_OPTIONS } from "./settingsSection.view";
 
 export type { ModuleRuntimeContext };
 
@@ -44,6 +50,24 @@ function SecondsRow({ label, get, set, minMs }: SecondsRowProps) {
   );
 }
 
+/** The Panel position select. Local state keeps the `<select>` controlled and mirrors the store (P3). */
+function PositionRow({ settings }: { settings: Settings }) {
+  const [value, setValue] = React.useState(() => settings.getPanelPosition());
+  return (
+    <SettingsRow label="Panel position">
+      <Select
+        options={PANEL_POSITION_OPTIONS}
+        value={value}
+        ariaLabel="Panel position"
+        onChange={(v) => {
+          settings.setPanelPosition(v);
+          setValue(settings.getPanelPosition());
+        }}
+      />
+    </SettingsRow>
+  );
+}
+
 function Section({ settings }: { settings: Settings }) {
   return (
     <SettingsSection title="Track & Playlist Preview">
@@ -59,6 +83,7 @@ function Section({ settings }: { settings: Settings }) {
         set={(ms) => settings.setGapMs(ms)}
         minMs={0}
       />
+      <PositionRow settings={settings} />
       {TYPES.map((t) => (
         <SettingsToggleRow
           key={t.key}

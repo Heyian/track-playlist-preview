@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatSeconds, parseSeconds } from "./settingsSection.view";
+import { formatSeconds, parseSeconds, PANEL_POSITION_OPTIONS } from "./settingsSection.view";
 
 describe("formatSeconds (S7)", () => {
   it.each([
@@ -37,5 +37,15 @@ describe("parseSeconds with a 0 ms minimum (S8)", () => {
     ["0", 0],
   ])("%j → %d", (text, ms) => {
     expect(parseSeconds(text, 0)).toBe(ms);
+  });
+});
+
+describe("PANEL_POSITION_OPTIONS (P3)", () => {
+  it("P3: panel position options — values, labels, order", () => {
+    expect(PANEL_POSITION_OPTIONS).toEqual([
+      { value: "right", label: "Right edge" },
+      { value: "playbar", label: "Over the Playbar" },
+      { value: "centre", label: "Window centre" },
+    ]);
   });
 });

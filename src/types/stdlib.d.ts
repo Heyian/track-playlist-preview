@@ -37,4 +37,13 @@ declare module "*/modules/stdlib/lib/primitives.js" {
     ariaLabel?: string;
     onInput(value: string): void;
   }): ReactElement;
+  /** Renders a `<label htmlFor>` only when `htmlFor` is given. */
+  export function SettingsRow(props: { label: string; htmlFor?: string; children?: ReactNode }): ReactElement;
+  /** A native `<select>`; `onChange` gets the chosen option's `value`. Has no `id` prop. */
+  export function Select(props: {
+    options: readonly { value: string; label: string }[];
+    value: string;
+    onChange(value: string): void;
+    ariaLabel?: string;
+  }): ReactElement;
 }
