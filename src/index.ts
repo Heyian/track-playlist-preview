@@ -1,7 +1,7 @@
 // src/index.ts
 // Entry point: the v3 loader calls load(ctx). It waits (capped) for client
 // readiness, then builds live adapters, wires the pure core and registers UI.
-import { createSettings } from "./settings";
+import { createSettings, type Settings } from "./settings";
 import { createPreviewSource } from "./previewSource";
 import { enumerate, collectionTypeForUri } from "./collections";
 import { createPreviewEngine } from "./previewEngine";
@@ -38,10 +38,21 @@ function missingGlobals(): string[] {
   return (["React", "ContextMenu", "Platform"] as const).filter((name) => !s?.[name]).map((name) => `Spicetify.${name}`);
 }
 
+// The loader imports this file once but calls load() again each time the
+// module is re-enabled. Unload removes only registrar items (full teardown is
+// #8), so everything else is wired once and kept.
+let wired: Settings | undefined;
+
 export async function load(ctx: ModuleRuntimeContext): Promise<void> {
   // Rejects after READY_TIMEOUT_MS; the loader then records the module as failed (S4, S18).
   await waitForClient({ missing: missingGlobals, timer: realTimer, timeoutMs: READY_TIMEOUT_MS });
 
+  wired ??= wire();
+  registerSettingsSection(ctx, wired);
+}
+
+/** Build live adapters, wire the pure core and register the non-registrar UI. */
+function wire(): Settings {
   const settings = createSettings(localStorageAdapter);
   const source = createPreviewSource(trackPreviewRequest);
   const collectionDeps = createCollectionDeps();
@@ -117,7 +128,7 @@ export async function load(ctx: ModuleRuntimeContext): Promise<void> {
 
   actionBar.start();
   contextMenus.register();
-  registerSettingsSection(ctx, settings);
+  return settings;
 }
 
 /** The collection URI for the page currently shown, or null. */
