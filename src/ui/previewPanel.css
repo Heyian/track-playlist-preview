@@ -1,0 +1,160 @@
+/* src/ui/previewPanel.css — inlined into the bundle by build.ts.
+ * Colours only from Spotify's --background-elevated-base, --text-base and
+ * --text-subdued; button classes are read from a live encore sibling at render.
+ * z-index 50: above page content, below PopupModal's overlay (z 100) — spike p1. */
+
+#tpp-preview-root {
+  /* Overwritten inline at each open() from the measured Playbar placement. */
+  --tpp-panel-bottom: 104px;
+  /* Fixed, so the stack's anchor doesn't move when the panel closes. */
+  --tpp-panel-height: 384px;
+  --tpp-stack-bottom: calc(var(--tpp-panel-bottom) + var(--tpp-panel-height) + 8px);
+  /* Clear of Spotify's 64 px top bar, plus a gap. */
+  --tpp-top-clearance: 72px;
+}
+
+.tpp-panel {
+  position: fixed;
+  right: 16px;
+  bottom: var(--tpp-panel-bottom);
+  width: 280px;
+  height: var(--tpp-panel-height);
+  box-sizing: border-box;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px 12px;
+  overflow: hidden;
+  border-radius: 8px;
+  background-color: var(--background-elevated-base);
+  color: var(--text-base);
+}
+
+.tpp-panel:focus {
+  outline: none;
+}
+
+.tpp-panel-header {
+  display: flex;
+  justify-content: flex-end;
+  flex: none;
+}
+
+.tpp-panel-close {
+  padding: 4px;
+  min-width: 0;
+  min-block-size: 0;
+}
+
+.tpp-panel-artwork {
+  flex: none;
+  align-self: center;
+  width: 192px;
+  height: 192px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.tpp-panel-artwork-placeholder {
+  background-color: var(--text-subdued);
+  opacity: 0.25;
+}
+
+.tpp-panel-heading,
+.tpp-panel-source,
+.tpp-panel-indicator {
+  flex: none;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tpp-panel-heading {
+  margin-top: 4px;
+  font-weight: 700;
+}
+
+.tpp-panel-source,
+.tpp-panel-indicator {
+  font-size: 0.875rem;
+  color: var(--text-subdued);
+}
+
+.tpp-panel-progress {
+  flex: none;
+  position: relative;
+  height: 4px;
+  margin-top: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.tpp-panel-progress::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: var(--text-subdued);
+  opacity: 0.3;
+}
+
+.tpp-panel-progress-fill {
+  position: relative;
+  height: 100%;
+  background-color: var(--text-base);
+}
+
+.tpp-panel-controls {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: auto;
+}
+
+.tpp-panel-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tpp-panel-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tpp-panel-remove {
+  margin-left: auto;
+}
+
+.tpp-removals-stack {
+  position: fixed;
+  right: 16px;
+  bottom: var(--tpp-stack-bottom);
+  width: 280px;
+  max-height: calc(100vh - var(--tpp-stack-bottom) - var(--tpp-top-clearance));
+  box-sizing: border-box;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.tpp-removals-row {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background-color: var(--background-elevated-base);
+  color: var(--text-base);
+}
+
+.tpp-removals-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
