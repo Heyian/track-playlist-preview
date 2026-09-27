@@ -32,7 +32,7 @@ const GLOBAL_NAV = ".Root__globalNav";
 function measurePlacement(): PanelPlacement {
   const bar = document.querySelector(PLAYBAR)?.getBoundingClientRect() ?? null;
   const nav = document.querySelector(GLOBAL_NAV)?.getBoundingClientRect() ?? null;
-  return panelPlacement({ bar, nav, innerWidth: window.innerWidth, innerHeight: window.innerHeight });
+  return panelPlacement({ position: "right", bar, nav, innerWidth: window.innerWidth, innerHeight: window.innerHeight });
 }
 
 function Icon(props: { name: Spicetify.Icon }): React.ReactElement {
@@ -251,9 +251,11 @@ export function createPreviewPanel(deps: PreviewPanelDeps): PanelPort {
     open(view: PanelView): void {
       // Placement is measured per open(); the stack's anchor derives from it in CSS.
       const place = measurePlacement();
-      rootEl.style.setProperty("--tpp-panel-right", `${place.rightPx}px`);
-      rootEl.style.setProperty("--tpp-panel-bottom", `${place.bottomPx}px`);
-      rootEl.style.setProperty("--tpp-top-clearance", `${place.topClearancePx}px`);
+      if (place.position === "right") {
+        rootEl.style.setProperty("--tpp-panel-right", `${place.rightPx}px`);
+        rootEl.style.setProperty("--tpp-panel-bottom", `${place.bottomPx}px`);
+        rootEl.style.setProperty("--tpp-top-clearance", `${place.topClearancePx}px`);
+      }
       const s = store.get();
       store.set({ view, focusSeq: s.focusSeq + 1 });
     },
