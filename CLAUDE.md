@@ -33,6 +33,11 @@ There is no linter. `bun run check` is the whole gate.
   panel and pending-removals stack, placement, and acceptance criteria AC46–AC70.
 - [Remove-from-playlist spec](docs/specs/2026-09-26-remove-from-playlist-design.md) — Remove, the
   Undo window and exclusion, criteria R1–R16.
+- [Settings-page spec](docs/specs/2026-09-27-settings-page-design.md) — settings on the Spicetify
+  Settings page, the `load(ctx)` entry, criteria S1–S16.
+- [Spicetify v3 platform notes](docs/spicetify-v3-platform.md) — read before relying on how the
+  CLI, loader or stdlib behave: installs, dependencies, load order and readiness, Settings page,
+  devtools. Record new verified findings there.
 
 ## Build
 
