@@ -13,7 +13,9 @@
 //      hooks.
 //   2. Imported CSS is inlined into the JS bundle and injected as a <style> tag,
 //      since a separate .css file would never be loaded.
-//   3. The whole bundle waits for Spicetify to finish loading before running.
+//   3. The bundle is an ES module exporting `load(ctx)`, which the v3 loader
+//      calls; `load` itself awaits a capped client-readiness wait. stdlib
+//      imports (`/modules/stdlib/…`) stay external — the client serves them.
 
 import { existsSync } from "node:fs";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
@@ -77,7 +79,7 @@ async function metadata(): Promise<string> {
       tags: [],
       entries: { js: "index.js" },
       hasMixins: false,
-      dependencies: {},
+      dependencies: pkg.spicetify?.dependencies ?? {},
     },
     null,
     2,
@@ -92,8 +94,9 @@ async function build(outDir: string, minify: boolean): Promise<void> {
     entrypoints: [ENTRY],
     outdir: tmp,
     target: "browser",
-    format: "iife",
+    format: "esm",
     minify,
+    external: ["/modules/stdlib/*"],
     plugins: [spicetifyReact],
   });
 
@@ -111,25 +114,18 @@ async function build(outDir: string, minify: boolean): Promise<void> {
     else if (file.endsWith(".js")) js += text;
   }
 
+  // Runs once, at module evaluation, ahead of the bundled code.
   const styleInjection = css
-    ? `
-  if (!document.getElementById(${JSON.stringify(NAME)})) {
-    const el = document.createElement("style");
-    el.id = ${JSON.stringify(NAME)};
-    el.textContent = ${JSON.stringify(css)};
-    document.head.appendChild(el);
-  }`
+    ? `if (!document.getElementById(${JSON.stringify(NAME)})) {
+  const el = document.createElement("style");
+  el.id = ${JSON.stringify(NAME)};
+  el.textContent = ${JSON.stringify(css)};
+  document.head.appendChild(el);
+}
+`
     : "";
 
-  // Spicetify injects extensions early; React and the platform APIs may not be
-  // ready yet, so hold until they are.
-  const bundle = `(async () => {
-  while (!Spicetify?.React || !Spicetify?.ReactDOM || !Spicetify?.Platform) {
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }${styleInjection}
-${js}
-})();
-`;
+  const bundle = `${styleInjection}${js}`;
 
   await mkdir(outDir, { recursive: true });
   const outFile = join(outDir, "index.js");
