@@ -110,6 +110,86 @@ Not verified live (it would modify a playlist): Spotify's desktop app is reporte
 selected tracklist row on `Delete`, immediately. Scoping our shortcuts to panel focus (AC66) avoids
 that clash, as well as clashes with typing in search, so the design holds either way.
 
+### Spike results (Task 2, verified 2026-09-26)
+
+Live over CDP (`scripts/cdp-eval.mjs`) against the running client (Spotify 1.2.96.518, layout class
+`global-nav-centered`). Each probe registered nothing that outlived the call; UI probes unmounted
+and removed their host node in a `finally`.
+
+**p1 — body-level React root.** `Spicetify.ReactDOM.createRoot` exists and is the API to use (not
+`.render`). A `div#tpp-spike` appended to `<body>` with
+`position: fixed; right: 16px; bottom: 120px; z-index: 50` hit-tests as itself at its centre and as
+a page element at a point outside it. With `Spicetify.PopupModal.display(...)` open, the same centre
+point resolves to `.GenericModal__overlay` — the host is correctly covered by the modal. A `<section
+tabIndex={-1}>` rendered into the host accepted `.focus()` (`document.activeElement` matched). Full
+`createRoot().unmount()` + node removal leaves no trace. **No STOP condition hit** — z-index 50 is
+confirmed sufficient for "above the page, below `PopupModal`'s overlay (z 100)".
+
+**p2 — CSS variables and geometry.**
+`getComputedStyle(document.documentElement)` resolves `--background-elevated-base: #152238`,
+`--text-base: #FFFFFF`, `--text-subdued: #ADB5BD`.
+
+Selector `.Root__now-playing-bar` exists (`footer` does not — no `<footer>` element in this layout)
+and is stable, but **in the current `global-nav-centered` layout it is not a bottom bar**: it docks
+top-right, above `.Root__right-sidebar`, inside the 420 px right column (`Root__globalNav` occupies
+the top 64 px full-width; `Root__now-playing-bar` then occupies roughly `top 56, bottom 472, left
+1473, right 1893` at a 1909×1143 window; `Root__right-sidebar` occupies `top 472, bottom 1135` in
+the same column). Confirmed via `[data-testid="now-playing-bar"]` / `.main-nowPlayingBar-*`, which
+report the same right-docked geometry (inner box `1481,64 → 1885,464`). There is no full-width
+element pinned to the window's bottom edge. Consequence for this spec: a panel docked at the right
+edge with `bottom: 16px` (or the probe's `bottom: 120px`) sits well below the playing-bar's vertical
+range and does not intersect it (AC70 holds), but "the Playbar" is a right-docked block, not a
+footer — code and comments should call the selector by name rather than assume bottom placement.
+
+The notistack container is found at `.notistack-Snackbar` (also matched by `[class*="notistack"]`,
+`#notistack-snackbar` did not match). During `Spicetify.showNotification("probe")` its bounding box
+was bottom-centre, e.g. `left 920, top 1067, right 989, bottom 1115` at the same window size —
+consistent with the existing "Notice geometry" finding above (bottom-centre, not intersecting a
+right-edge panel).
+
+**p3 — `getTrack`.** `Spicetify.GraphQL.Definitions.getTrack` takes `{ uri }` (a single track URI;
+the definition's own `variables` field lists `name`/`operation`/`sha256Hash`/`value` — the request
+variable itself is just `{ uri }`). For `spotify:track:2pwED7E7gGr3UR7T3s3LSM`:
+- `data.trackUnion.name` → `"Papaoutai - Afro Soul"`.
+- `data.trackUnion.firstArtist.items[].profile.name` → `["mikeeysmind"]`.
+- `data.trackUnion.otherArtists.items[].profile.name` → present here: `["Chill77", "Unjaps"]`.
+- `data.trackUnion.albumOfTrack.coverArt.sources[]` → `{ url, width, height }` triples for
+  300/64/640 px, `url`s of the form `https://i.scdn.co/image/...`.
+
+All four paths in the design doc's table above are confirmed exactly as specified; no changes needed.
+
+**p4 — collection names.**
+- Playlist: `Spicetify.Platform.PlaylistAPI.getMetadata(playlistUri).name` → confirmed
+  (`"Chansons aimées Papa"` for a real user playlist).
+- Album: `PlaylistAPI.getMetadata(albumUri).name` **also works** for an album URI and returned the
+  correct name (`"Papaoutai (Afro Soul)"`); `Spicetify.GraphQL.Definitions.getAlbum` with
+  `{ uri: albumUri }` returned the same name at `data.albumUnion.name`, confirming the documented
+  fallback works too. Either call is viable; `PlaylistAPI.getMetadata` is simplest since it also
+  covers playlists, so a single code path can try it for both collection types before falling back
+  to `getAlbum`.
+- Artist: `Spicetify.GraphQL.Definitions.queryArtistOverview` with `{ uri: artistUri }` →
+  `data.artistUnion.profile.name` → confirmed (`"mikeeysmind"`).
+
+**r1 — URI-form removal of duplicates.**
+Created a throwaway playlist via `Spicetify.Platform.RootlistAPI.createPlaylist("tpp-spike-throwaway",
+{ after: "start" })`, which resolves directly to the new playlist's URI string (no wrapper object).
+Added the same track twice plus one other via
+`Spicetify.Platform.PlaylistAPI.add(playlistUri, [trackUri, trackUri, otherTrackUri], { after: "end" })`.
+`getContents` showed 3 rows, each with a distinct `uid` (two rows shared the duplicate `uri`).
+Calling `Spicetify.Platform.PlaylistAPI.remove(playlistUri, [{ uri: trackUri, uid: "" }])` once
+removed **both** copies in a single call — `getContents` afterward showed only the other track, zero
+remaining rows for the duplicated URI. **Confirms the spec's existing removal shape
+(`{ uri: trackUri, uid: "" }`) already handles duplicates; Task 6's `playlistRemove` does not need
+the per-`uid` fallback path.**
+
+Cleanup pitfall (recorded for anyone reusing this pattern, not itself part of r1's removal
+contract): `Spicetify.Platform.RootlistAPI.remove(uris)` maps each array entry as `e.uid ?? e.uri`,
+so passing plain URI strings (`remove([playlistUri])`) silently no-ops — `contains([playlistUri])`
+still returned `true` afterward. The working call is `RootlistAPI.remove([{ uri: playlistUri }])`,
+after which `contains` returned `false` and the playlist no longer appeared in
+`RootlistAPI.getContents()`. The throwaway playlist was deleted this way; no user playlist was
+touched at any point.
+
 ---
 
 ## Architecture
