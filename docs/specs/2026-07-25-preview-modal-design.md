@@ -195,7 +195,7 @@ natively.
 │                    ✕  │
 │  ┌─────────────────┐  │
 │  │    artwork      │  │   ~280 px wide, right edge, above the Playbar
-│  └─────────────────┘  │   artwork shrinks on short windows
+│  └─────────────────┘  │
 │  Title — Artist       │
 │  From: Chill Mix 4/37 │
 │  ▓▓▓▓▓▓░░░░░░░░░░░░   │
@@ -206,16 +206,17 @@ natively.
 - Artwork (neutral placeholder when `artworkUrl` is absent), `Title — Artist`.
 - `From: <collection name> · i/N`. Single-track session → single-track indicator, no counter.
 - **Stop**, **Next** (disabled on the last queue entry), display-only **progress bar** against the
-  effective preview window. The bar holds full during `gapMs` and resets when the next track starts.
+  effective preview window. After a normal completion the bar holds full during `gapMs`. It resets
+  when the next track starts. Next and Remove advance with no hold.
 - **Remove**: icon (`minus`) + text "Remove", right-aligned apart from Stop/Next, accessible label
   "Remove from *playlist name*". Present only in a removable session (remove spec R1–R2).
 - **Skipping state** on `trackSkipped` (AC61).
 - **✕** close = stop.
 
 **Pending-removals stack**, directly above the panel: rows `Removed *Title* from *Playlist* · Undo`,
-newest nearest the panel. A row disappears when its removal is undone, commits, or fails (a failure
-then shows the R15 notice). The stack stays at the same anchor when the panel is closed. It has no
-row limit.
+newest nearest the panel. A row disappears when its removal is undone or its commit call is issued
+(a later failure shows only the R15 notice). The stack stays at the same anchor when the panel is
+closed. It has no row limit.
 
 ### Behaviour changes vs. the shipped extension
 
@@ -237,7 +238,7 @@ row limit.
 | `getTrack` fails for a single track | URI-label fallback as today; artwork placeholder. |
 | Session aborts on API error (prior AC13) | Panel closes with `sessionEnded`; the abort notice shows. |
 | `canRemove` lookup fails | No Remove control; session unaffected (R3). |
-| Removal commit rejects | Stack row removed; R15 notice. |
+| Removal commit rejects | R15 notice (the stack row already left when the call was issued). |
 
 ### Testing
 
@@ -279,7 +280,8 @@ contract. Session-lifecycle terms are as defined in the shipped spec.
   artist, position counter and progress in place, without closing and reopening.
 - **AC55**: When a session ends as `completed`, `stopped` or `aborted`, the panel closes. When a
   session ends as `replaced` (a new session started from the page), the panel stays open and shows
-  the new session's collection, counter and first track.
+  the new session's view at its starting entry (the selected entry for *Preview from here*, per R4),
+  with the collection name and counter per AC48 and the playing or skipping state per AC49/AC61.
 - **AC65**: While the panel is open, the page stays interactive: navigating to another page does not
   close the panel or interrupt the session. The action bar, context menus and the profile-menu
   settings entry remain clickable, and each behaves as its shipped criterion states (AC34, AC19/AC27,
@@ -290,17 +292,21 @@ contract. Session-lifecycle terms are as defined in the shipped spec.
 - **AC47**: The panel displays the current track's album artwork, name and artist. When
   `artworkUrl` is absent or fails to load, it shows a neutral placeholder rather than a broken image.
 - **AC48**: Given a collection-backed session, the panel displays the resolved collection name and
-  the one-based position `i/N` (`i` from the engine's index, `N` the preview-queue length). Given a
+  the one-based position `i/N` (`i` from the engine's index, `N` the preview-queue length). For a
+  Liked Songs session the collection name is the constant "Liked Songs". Given a
   single-track session (track context menu, or *Preview from here* outside a collection context per
   prior AC37), the panel displays the single-track indicator and **neither** a collection name
   **nor** an `i/N` counter.
 - **AC53**: The panel shows a display-only progress bar reflecting elapsed time against the
-  effective preview window. It reaches full as the track advances, **holds at full for `gapMs`**,
-  and resets to empty when the next track starts. Verified manually via CDP.
-- **AC61**: Given the engine emits `trackSkipped`, the panel shows that track's name, artist and
-  one-based `i/N`, a "No preview — skipping" indicator, placeholder artwork and an empty progress
-  bar, and none of the previous track's details. Through consecutive skips neither the details nor
-  the counter go stale.
+  effective preview window. On a normal completion (duration expiry or natural clip end, prior
+  AC14/AC15) it reaches full and **holds at full for `gapMs`**. On Next (AC52) or Remove (R6) there
+  is no full-bar hold and no gap (prior AC23). On `trackSkipped` it is empty (AC61). It resets to
+  empty when the next track starts. Verified manually via CDP.
+- **AC61**: Given the engine emits `trackSkipped`, the panel shows that track's name and artist, a
+  "No preview — skipping" indicator, placeholder artwork and an empty progress bar, and none of the
+  previous track's details. In a collection-backed session it also shows the one-based `i/N`. In a
+  single-track session it keeps the single-track indicator and shows no counter (AC48). Through
+  consecutive skips neither the details nor the counter go stale.
 - **AC68**: In a removable session the panel shows a Remove button with the `minus` icon (full
   `<svg>` markup from `Spicetify.SVGIcons`) and the visible text "Remove", positioned apart from Stop
   and Next, with accessible label "Remove from *playlist name*". In a non-removable session no Remove
@@ -327,15 +333,16 @@ contract. Session-lifecycle terms are as defined in the shipped spec.
   with the track title, source playlist name and an Undo action. The row stays visible and its
   Undo usable until the commit call is issued, regardless of how many removals are pending and
   whether the panel is open. Using Undo is R11's undo. The row disappears when the removal is
-  undone, commits, or fails (failure also shows R15's notice). With no pending removals, the stack
-  renders nothing.
+  undone or when its commit call is issued. A later rejection shows only R15's notice and no row.
+  Rows are ordered newest nearest the panel. With no pending removals, the stack renders nothing.
 
 **Placement**
 
 - **AC70**: At a window of at least 1280×800, the panel and the pending-removals stack sit on the
-  right edge. Their bounding boxes don't intersect the Playbar or the notice container's area, and
-  they render above page content and below `Spicetify.PopupModal`'s overlay. No `e-[0-9]` class
-  literal appears in `src/` (grep).
+  right edge, the stack directly above the panel. The stack keeps the same position whether the
+  panel is open or closed. Their bounding boxes don't intersect the Playbar or the notice
+  container's area, and they render above page content and below `Spicetify.PopupModal`'s overlay.
+  No `e-[0-9]` class literal appears in `src/` (grep).
 
 **Data**
 
@@ -348,8 +355,8 @@ contract. Session-lifecycle terms are as defined in the shipped spec.
   runs normally.
 - **AC69**: Given a single-track session for a track whose `getTrack` lookup succeeds, the produced
   `TrackRef` carries that track's real name, its artist name(s) joined by ", ", and its artwork URL.
-  Given the lookup fails, the name falls back to the URI's last segment and the artist to empty, and
-  the session still starts.
+  Given the lookup fails, the name falls back to the URI's last segment, the artist to empty and
+  `artworkUrl` to undefined, and the session still starts.
 
 **Superseded / removed**
 
