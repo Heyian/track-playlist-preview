@@ -82,6 +82,8 @@ export const PANEL_HEIGHT_PX = 384;
 const EDGE_GAP_PX = 16;
 const STACK_GAP_PX = 8;
 const BOTTOM_DOCK_TOLERANCE_PX = 8;
+/** One pending-removal row (live height 62 px), so the stack never collapses to zero (AC67). */
+const MIN_STACK_ROOM_PX = 64;
 /** Clears a bottom Playbar-sized strip and the bottom-centre notice area. */
 const FALLBACK_BOTTOM_PX = 104;
 /** Spotify's 64 px top bar plus a gap, when `.Root__globalNav` isn't measurable. */
@@ -116,7 +118,7 @@ export function panelPlacement(i: {
   }
   // Not bottom-docked (e.g. the top-right dock of global-nav-centered).
   const roomBelow = innerHeight - bar.bottom - STACK_GAP_PX - EDGE_GAP_PX;
-  if (roomBelow >= PANEL_HEIGHT_PX) {
+  if (roomBelow >= PANEL_HEIGHT_PX + STACK_GAP_PX + MIN_STACK_ROOM_PX) {
     return { rightPx: EDGE_GAP_PX, bottomPx: EDGE_GAP_PX, topClearancePx: bar.bottom + STACK_GAP_PX };
   }
   // Left of the Playbar's column; raised clear of the bottom-centre notice.

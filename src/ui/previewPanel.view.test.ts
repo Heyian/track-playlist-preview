@@ -164,9 +164,11 @@ describe("panelPlacement", () => {
     });
   });
 
-  it("AC70: the fit check is exact: 472 + 8 + 384 + 16 = 880", () => {
-    expect(panelPlacement({ bar: topDockedBar, nav, innerWidth: 1280, innerHeight: 880 }).rightPx).toBe(16);
-    expect(panelPlacement({ bar: topDockedBar, nav, innerWidth: 1280, innerHeight: 879 }).rightPx).not.toBe(16);
+  it("AC70/AC67: the fit check leaves one stack row: 472 + 8 + 64 + 8 + 384 + 16 = 952", () => {
+    expect(panelPlacement({ bar: topDockedBar, nav, innerWidth: 1280, innerHeight: 952 }).rightPx).toBe(16);
+    expect(panelPlacement({ bar: topDockedBar, nav, innerWidth: 1280, innerHeight: 951 }).rightPx).not.toBe(16);
+    // Room for the panel alone (880) is not enough: the stack would get no height.
+    expect(panelPlacement({ bar: topDockedBar, nav, innerWidth: 1280, innerHeight: 880 }).rightPx).not.toBe(16);
   });
 
   it("AC70: top-docked Playbar without room below → left of its column, above the notice area", () => {

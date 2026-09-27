@@ -242,9 +242,9 @@ layouts and top-right-docked in others (`global-nav-centered`, where it spans y 
 open the panel measures its `getBoundingClientRect()` and picks one of four placements; the stack
 always shares the panel's `right` and sits 8 px above it, growing up to a ceiling. (1) Selector
 missing: `right 16`, `bottom 104`. (2) Bottom-docked (`rect.bottom >= innerHeight - 8`): `right 16`,
-`bottom = innerHeight - rect.top + 16`. (3) Not bottom-docked and the 384 px panel fits below it
-(`innerHeight - rect.bottom - 8 - 16 >= 384`): `right 16`, `bottom 16`, stack ceiling
-`rect.bottom + 8`. (4) Not bottom-docked and it doesn't fit: left of the Playbar's column,
+`bottom = innerHeight - rect.top + 16`. (3) Not bottom-docked and the 384 px panel plus one 64 px stack row fit below it
+(`innerHeight - rect.bottom - 8 - 16 >= 384 + 8 + 64`, so the stack never collapses, AC67):
+`right 16`, `bottom 16`, stack ceiling `rect.bottom + 8`. (4) Not bottom-docked and it doesn't fit: left of the Playbar's column,
 `right = innerWidth - rect.left + 16`, and `bottom 104` so the panel clears the bottom-centre notice
 (at 1280×800 the notice spans x 517–763, y 724–772, which a `bottom 16` panel at x 548–828 would
 hit). Outside case 3 the stack ceiling is `.Root__globalNav`'s bottom + 8, or 72 px without it. The
