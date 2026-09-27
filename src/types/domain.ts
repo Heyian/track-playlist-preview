@@ -22,16 +22,27 @@ export type PlaylistMetadataPort = (uri: string) => Promise<PlaylistMetadata>;
 /** Commits a single track's removal from a playlist (removes every copy; see R9). */
 export type RemovePort = (playlistUri: string, trackUri: string) => Promise<void>;
 
+/** Where the preview panel and the pending-removals stack are placed (panel-position spec). */
+export type PanelPosition = "right" | "playbar" | "centre";
+
+export const PANEL_POSITIONS: readonly PanelPosition[] = ["right", "playbar", "centre"];
+
+export function isPanelPosition(v: unknown): v is PanelPosition {
+  return (PANEL_POSITIONS as readonly unknown[]).includes(v);
+}
+
 export interface PreviewSettings {
   durationMs: number;
   gapMs: number;
   enabled: Record<CollectionType, boolean>;
+  panelPosition: PanelPosition;
 }
 
 export const DEFAULT_SETTINGS: PreviewSettings = {
   durationMs: 15000,
   gapMs: 0,
   enabled: { playlist: true, likedSongs: true, album: true, artist: true },
+  panelPosition: "right",
 };
 
 /** Callbacks the engine hands to the audio port for one clip. */

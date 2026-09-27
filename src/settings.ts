@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, type PreviewSettings, type CollectionType } from "./types/domain";
+import { DEFAULT_SETTINGS, isPanelPosition, type PreviewSettings, type CollectionType, type PanelPosition } from "./types/domain";
 
 export interface StoragePort {
   get(key: string): string | null;
@@ -24,11 +24,17 @@ export function createSettings(storage: StoragePort) {
     const raw = storage.get(KEY);
     if (!raw) return structuredClone(DEFAULT_SETTINGS);
     try {
-      const parsed = JSON.parse(raw) as { durationMs?: unknown; gapMs?: unknown; enabled?: PreviewSettings["enabled"] };
+      const parsed = JSON.parse(raw) as {
+        durationMs?: unknown;
+        gapMs?: unknown;
+        enabled?: PreviewSettings["enabled"];
+        panelPosition?: unknown;
+      };
       return {
         durationMs: isValid(parsed.durationMs, MIN_DURATION_MS) ? parsed.durationMs : DEFAULT_SETTINGS.durationMs,
         gapMs: isValid(parsed.gapMs, MIN_GAP_MS) ? parsed.gapMs : DEFAULT_SETTINGS.gapMs,
         enabled: { ...DEFAULT_SETTINGS.enabled, ...(parsed.enabled ?? {}) },
+        panelPosition: isPanelPosition(parsed.panelPosition) ? parsed.panelPosition : DEFAULT_SETTINGS.panelPosition,
       };
     } catch {
       return structuredClone(DEFAULT_SETTINGS);
@@ -45,6 +51,7 @@ export function createSettings(storage: StoragePort) {
     getDurationMs: (): number => current.durationMs,
     getGapMs: (): number => current.gapMs,
     isEnabled: (type: CollectionType): boolean => current.enabled[type],
+    getPanelPosition: (): PanelPosition => current.panelPosition,
     setDurationMs(ms: number): void {
       if (!isValid(ms, MIN_DURATION_MS)) return;
       current.durationMs = ms;
@@ -57,6 +64,12 @@ export function createSettings(storage: StoragePort) {
     },
     setEnabled(type: CollectionType, on: boolean): void {
       current.enabled[type] = on;
+      commit();
+    },
+    /** Takes a raw string: the `<select>` hands one back. Unknown values are ignored (P2). */
+    setPanelPosition(p: string): void {
+      if (!isPanelPosition(p)) return;
+      current.panelPosition = p;
       commit();
     },
     /** Called after every accepted change; returns an unsubscribe function. */

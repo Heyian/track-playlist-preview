@@ -147,3 +147,56 @@ describe("load-time fallback (S11)", () => {
     }
   });
 });
+
+describe("panelPosition (P1, P2)", () => {
+  it("P1: defaults to right when the field is missing", () => {
+    const stored = createSettings(memoryStorage({ [KEY]: JSON.stringify({ durationMs: 3000 }) }));
+    expect(stored.getPanelPosition()).toBe("right");
+    expect(createSettings(memoryStorage()).getPanelPosition()).toBe("right");
+  });
+
+  it.each(["playbar", "centre"])("P1: a stored playbar or centre round-trips (%s)", (v) => {
+    expect(createSettings(memoryStorage({ [KEY]: JSON.stringify({ panelPosition: v }) })).getPanelPosition()).toBe(v);
+    const storage = memoryStorage();
+    createSettings(storage).setPanelPosition(v);
+    expect(createSettings(storage).getPanelPosition()).toBe(v);
+  });
+
+  it.each(["left", "Right", "", "center", "Centre", 42, null, {}])(
+    "P1: any other stored value loads as right; other fields are unaffected (%j)",
+    (v) => {
+      const storage = memoryStorage({
+        [KEY]: JSON.stringify({ durationMs: 3000, gapMs: 500, enabled: { album: false }, panelPosition: v }),
+      });
+      const s = createSettings(storage);
+      expect(s.getPanelPosition()).toBe("right");
+      expect(s.getDurationMs()).toBe(3000);
+      expect(s.getGapMs()).toBe(500);
+      expect(s.isEnabled("album")).toBe(false);
+    },
+  );
+
+  it("P2: a valid value is stored, then each listener is called once", () => {
+    const storage = memoryStorage();
+    const s = createSettings(storage);
+    const seen = () => expect(JSON.parse(storage.get(KEY)!).panelPosition).toBe("centre");
+    const a = vi.fn(seen);
+    const b = vi.fn(seen);
+    s.onChange(a);
+    s.onChange(b);
+    s.setPanelPosition("centre");
+    expect(a).toHaveBeenCalledTimes(1);
+    expect(b).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["left", "center", "", "RIGHT"])("P2: an unknown string stores nothing and calls no listener (%j)", (v) => {
+    const storage = memoryStorage({ [KEY]: JSON.stringify({ durationMs: 3000, panelPosition: "playbar" }) });
+    const s = createSettings(storage);
+    const listener = vi.fn();
+    s.onChange(listener);
+    const before = storage.get(KEY);
+    s.setPanelPosition(v);
+    expect(storage.get(KEY)).toBe(before);
+    expect(listener).not.toHaveBeenCalled();
+  });
+});
