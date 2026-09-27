@@ -48,14 +48,19 @@ bun run build            # bundles into your Spicetify modules folder
 spicetify apply          # restarts Spotify
 ```
 
+The module depends on Spicetify's **stdlib** module (≥ 1.13.0), declared in its `metadata.json`.
+`spicetify apply` installs stdlib and keeps it current, so there is nothing to install by hand. If
+you disable stdlib, this module stops loading: `Spicetify.Modules.report.failed` then names the
+missing dependency.
+
 ## Settings
 
-Open the profile menu in Spotify → **Track & Playlist Preview**.
+Open the profile menu in Spotify → **Spicetify Settings** → **Track & Playlist Preview** section.
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| Preview duration (ms) | 15000 | How long each clip plays before advancing. |
-| Gap between tracks (ms) | 0 | Pause inserted between previews. |
+| Preview duration (seconds) | 15 | How long each clip plays before advancing. Minimum 1. |
+| Gap between tracks (seconds) | 0 | Pause inserted between previews. |
 | Playlists / Liked Songs / Albums / Artists | on | Toggle the action-bar button and the collection right-click item per type. |
 
 ## Development
