@@ -8,6 +8,8 @@ export interface ContextMenuDeps {
   onPreviewTrack(uri: string): void;
   onPreviewFromHere(uri: string, contextUri?: string): void;
   getDurationMs(): number;
+  /** The collection URI of the page currently shown, or null. */
+  currentCollectionUri(): string | null;
 }
 
 export function createContextMenus(deps: ContextMenuDeps) {
@@ -48,7 +50,11 @@ export function createContextMenus(deps: ContextMenuDeps) {
       const previewFromHere = new Spicetify.ContextMenu.Item(
         "Preview from here",
         (uris, _uids, contextUri) => {
-          if (uris[0]) deps.onPreviewFromHere(uris[0], contextUri);
+          // Live track rows arrive with contextUri null (the menu props carry
+          // it at context.metadata.uri, which parseProps doesn't read), so fall
+          // back to the page's collection. A track not in it still falls back
+          // to a single-track session in the controller (AC37).
+          if (uris[0]) deps.onPreviewFromHere(uris[0], contextUri ?? deps.currentCollectionUri() ?? undefined);
         },
         isSingleTrack,
         "play",
