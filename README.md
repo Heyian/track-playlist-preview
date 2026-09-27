@@ -61,6 +61,7 @@ Open the profile menu in Spotify → **Spicetify Settings** → **Track & Playli
 | --- | --- | --- |
 | Preview duration (seconds) | 15 | How long each clip plays before advancing. Minimum 1. |
 | Gap between tracks (seconds) | 0 | Pause inserted between previews. |
+| Panel position | Right edge | Where the preview panel and Undo list appear: Right edge, Over the Playbar (covers Spotify's now-playing area), or Window centre. Applies immediately. |
 | Playlists / Liked Songs / Albums / Artists | on | Toggle the action-bar button and the collection right-click item per type. |
 
 ## Development
