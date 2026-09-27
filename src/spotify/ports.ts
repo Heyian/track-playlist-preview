@@ -31,7 +31,12 @@ export function createAudioPort(): AudioPort & ProgressSource {
     play(url: string, h: AudioHandlers): void {
       handlers = h;
       el.src = url;
-      void el.play().catch(() => h.onError()); // AC21: play() rejection is a clip error
+      // AC21: play() rejection is a clip error — but only for the clip still
+      // loaded. stop() → load() rejects the old play() with an AbortError; that
+      // must not skip whatever is playing now.
+      void el.play().catch(() => {
+        if (handlers === h) h.onError();
+      });
     },
     stop(): void {
       handlers = null;
