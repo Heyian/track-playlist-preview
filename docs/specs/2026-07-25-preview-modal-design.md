@@ -253,6 +253,10 @@ hit). Outside case 3 the stack ceiling is `.Root__globalNav`'s bottom + 8, or 72
 panel stays 280 px wide. This keeps the panel and stack clear of both the Playbar and the notice
 (AC70).
 
+_These are the **Right edge** rules. AC70's "on the right edge" means rules 1–4, including rule
+4's left-of-Playbar fallback. See the [panel-position spec](2026-09-27-panel-position-design.md),
+P15–P17, for the other positions._
+
 Styling comes from Spotify's CSS custom properties (e.g. `--background-elevated-base`, `--text-base`,
 `--text-subdued`) and, for buttons, classes read off a live `[data-encore-id="buttonTertiary"]`
 sibling, as `actionBarButton` already does. No `e-NNNNN` class is hardcoded (`CLAUDE.md`).
@@ -444,6 +448,10 @@ contract. Session-lifecycle terms are as defined in the shipped spec.
   panel is open or closed. Their bounding boxes don't intersect the Playbar or the notice
   container's area, and they render above page content and below `Spicetify.PopupModal`'s overlay.
   No `e-[0-9]` class literal appears in `src/` (grep).
+
+  _These are the **Right edge** rules. AC70's "on the right edge" means rules 1–4, including rule
+  4's left-of-Playbar fallback. See the [panel-position spec](2026-09-27-panel-position-design.md),
+  P15–P17, for the other positions._
 
 **Data**
 
