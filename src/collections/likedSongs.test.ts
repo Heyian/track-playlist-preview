@@ -22,6 +22,17 @@ describe("enumerateLikedSongs", () => {
     expect(refs.map((r) => r.uri)).toEqual(all.map((t) => t.uri));
   });
 
+  it("AC3: pages past the first 100 when the API reports totalLength 0 (live LibraryAPI shape)", async () => {
+    const all = Array.from({ length: 298 }, (_, i) => track(`t${i}`));
+    const api: LibraryApi = {
+      async getTracks({ limit, offset }) {
+        return { items: all.slice(offset, offset + limit), totalLength: 0, unfilteredTotalLength: 0 };
+      },
+    };
+    const refs = await enumerateLikedSongs(api);
+    expect(refs.map((r) => r.uri)).toEqual(all.map((t) => t.uri));
+  });
+
   it("AC6: excludes local and unplayable entries from Liked Songs", async () => {
     const all = [track("ok"), track("local", { isLocal: true }), track("gone", { isPlayable: false })];
     const refs = await enumerateLikedSongs(pagedLibrary(all, 100));

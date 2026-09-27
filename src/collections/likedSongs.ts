@@ -23,7 +23,9 @@ export async function enumerateLikedSongs(api: LibraryApi): Promise<TrackRef[]> 
       if (isEligibleTrack(item)) out.push(toTrackRef(item));
     }
     offset += items.length;
-    const total = page.totalLength ?? Infinity;
+    // The live LibraryAPI reports totalLength 0 even when it returns items, so
+    // only a positive total bounds the loop; otherwise an empty page ends it.
+    const total = page.totalLength && page.totalLength > 0 ? page.totalLength : Infinity;
     if (items.length === 0 || offset >= total) break;
   }
   return out;
