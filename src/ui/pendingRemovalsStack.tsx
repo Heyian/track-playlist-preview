@@ -6,7 +6,8 @@ import React from "react";
 import type { PendingRemovalEntry } from "../pendingRemovals";
 import type { PreviewPanelDeps } from "./previewPanel";
 
-function tertiaryClass(): string {
+/** Button classes come from a live encore sibling — never a hardcoded e-NNNNN class. */
+export function tertiaryClass(): string {
   return document.querySelector('[data-encore-id="buttonTertiary"]')?.className ?? "";
 }
 

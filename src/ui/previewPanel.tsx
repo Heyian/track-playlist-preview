@@ -7,7 +7,7 @@ import React from "react";
 import type { PanelPort, PanelView, ProgressMode } from "../types/domain";
 import type { PendingRemovalEntry } from "../pendingRemovals";
 import { panelKeyAction, PANEL_KEYS } from "./previewPanel.view";
-import { PendingRemovalsStack } from "./pendingRemovalsStack";
+import { PendingRemovalsStack, tertiaryClass } from "./pendingRemovalsStack";
 import "./previewPanel.css";
 
 export interface PreviewPanelDeps {
@@ -41,11 +41,6 @@ function panelBottomPx(): number {
   const rect = bar.getBoundingClientRect();
   const bottomDocked = rect.bottom >= window.innerHeight - BOTTOM_DOCK_TOLERANCE_PX;
   return bottomDocked ? window.innerHeight - rect.top + EDGE_GAP_PX : EDGE_GAP_PX;
-}
-
-/** Button classes come from a live encore sibling — never a hardcoded e-NNNNN class. */
-function tertiaryClass(): string {
-  return document.querySelector('[data-encore-id="buttonTertiary"]')?.className ?? "";
 }
 
 function Icon(props: { name: Spicetify.Icon }): React.ReactElement {
@@ -89,23 +84,30 @@ function ProgressBar(props: { mode: ProgressMode; progress: () => number }): Rea
   const { mode, progress } = props;
   const fillRef = React.useRef<HTMLDivElement>(null);
 
-  // "live": write the width straight to the DOM each frame instead of
-  // re-rendering at 60 fps. The loop is cancelled on mode change and unmount.
-  React.useEffect(() => {
-    if (mode !== "live") return;
+  // The width is driven only through the ref, never a style prop: the "live"
+  // loop writes the DOM directly, so a style prop would diff against a stale
+  // committed value and leave the bar frozen on live → empty (AC53/AC61).
+  // Layout effect, so the first paint already has the right width.
+  React.useLayoutEffect(() => {
+    const write = (fraction: number): void => {
+      if (fillRef.current) fillRef.current.style.width = toPercent(fraction);
+    };
+    if (mode !== "live") {
+      write(mode === "full" ? 1 : 0);
+      return;
+    }
     let frame = 0;
     const tick = (): void => {
-      if (fillRef.current) fillRef.current.style.width = toPercent(progress());
+      write(progress());
       frame = requestAnimationFrame(tick);
     };
-    frame = requestAnimationFrame(tick);
+    tick();
     return () => cancelAnimationFrame(frame);
   }, [mode, progress]);
 
-  const fraction = mode === "full" ? 1 : mode === "empty" ? 0 : progress();
   return (
     <div className="tpp-panel-progress" aria-hidden="true">
-      <div ref={fillRef} className="tpp-panel-progress-fill" style={{ width: toPercent(fraction) }} />
+      <div ref={fillRef} className="tpp-panel-progress-fill" />
     </div>
   );
 }
