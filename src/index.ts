@@ -1,7 +1,6 @@
 // src/index.ts
-// Entry point: build live adapters, wire the pure core, register UI.
-// build.ts has already awaited Spicetify.React/ReactDOM/Platform; other
-// namespaces (ContextMenu, GraphQL, Menu) are checked here.
+// Entry point: the v3 loader calls load(ctx). It waits (capped) for client
+// readiness, then builds live adapters, wires the pure core and registers UI.
 import { createSettings } from "./settings";
 import { createPreviewSource } from "./previewSource";
 import { enumerate, collectionTypeForUri } from "./collections";
@@ -29,14 +28,19 @@ import { createActionBarButton } from "./ui/actionBarButton";
 import { createPreviewPanel } from "./ui/previewPanel";
 import { progressFraction } from "./ui/previewPanel.view";
 import { createContextMenus } from "./ui/contextMenus";
-import { registerSettingsMenu } from "./ui/settingsModal";
+import { registerSettingsSection, type ModuleRuntimeContext } from "./ui/settingsSection";
+import { waitForClient, READY_TIMEOUT_MS } from "./waitForClient";
 import type { CollectionType } from "./types/domain";
 
-async function main(): Promise<void> {
-  // Namespaces build.ts does not wait for.
-  while (!Spicetify?.GraphQL || !Spicetify?.ContextMenu || !Spicetify?.Menu) {
-    await new Promise((r) => setTimeout(r, 50));
-  }
+/** The client-readiness globals still absent, as `"Spicetify.<Name>"`. */
+function missingGlobals(): string[] {
+  const s = (globalThis as { Spicetify?: Partial<Record<string, unknown>> }).Spicetify;
+  return (["React", "ContextMenu", "Platform"] as const).filter((name) => !s?.[name]).map((name) => `Spicetify.${name}`);
+}
+
+export async function load(ctx: ModuleRuntimeContext): Promise<void> {
+  // Rejects after READY_TIMEOUT_MS; the loader then records the module as failed (S4, S18).
+  await waitForClient({ missing: missingGlobals, timer: realTimer, timeoutMs: READY_TIMEOUT_MS });
 
   const settings = createSettings(localStorageAdapter);
   const source = createPreviewSource(trackPreviewRequest);
@@ -113,7 +117,7 @@ async function main(): Promise<void> {
 
   actionBar.start();
   contextMenus.register();
-  registerSettingsMenu(settings);
+  registerSettingsSection(ctx, settings);
 }
 
 /** The collection URI for the page currently shown, or null. */
@@ -125,5 +129,3 @@ function currentCollectionUri(): string | null {
   if (!m) return null;
   return `spotify:${m[1]}:${m[2]}`;
 }
-
-void main();

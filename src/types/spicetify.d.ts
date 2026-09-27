@@ -761,69 +761,6 @@ declare namespace Spicetify {
 		 */
 		function set(key: string, value: string): void;
 	}
-	/**
-	 * To create and prepend custom menu item in profile menu.
-	 */
-	namespace Menu {
-		/**
-		 * Create a single toggle.
-		 */
-		class Item {
-			constructor(name: string, isEnabled: boolean, onClick: (self: Item) => void, icon?: Icon | string);
-			name: string;
-			isEnabled: boolean;
-			/**
-			 * Change item name
-			 */
-			setName(name: string): void;
-			/**
-			 * Change item enabled state.
-			 * Visually, item would has a tick next to it if its state is enabled.
-			 */
-			setState(isEnabled: boolean): void;
-			/**
-			 * Change icon
-			 */
-			setIcon(icon: Icon | string): void;
-			/**
-			 * Item is only available in Profile menu when method "register" is called.
-			 */
-			register(): void;
-			/**
-			 * Stop item to be prepended into Profile menu.
-			 */
-			deregister(): void;
-		}
-
-		/**
-		 * Create a sub menu to contain Item toggles.
-		 * `Item`s in `subItems` array shouldn't be registered.
-		 */
-		class SubMenu {
-			constructor(name: string, subItems: Item[]);
-			name: string;
-			/**
-			 * Change SubMenu name
-			 */
-			setName(name: string): void;
-			/**
-			 * Add an item to sub items list
-			 */
-			addItem(item: Item): void;
-			/**
-			 * Remove an item from sub items list
-			 */
-			removeItem(item: Item): void;
-			/**
-			 * SubMenu is only available in Profile menu when method "register" is called.
-			 */
-			register(): void;
-			/**
-			 * Stop SubMenu to be prepended into Profile menu.
-			 */
-			deregister(): void;
-		}
-	}
 
 	/**
 	 * Keyboard shortcut library
@@ -1339,27 +1276,6 @@ declare namespace Spicetify {
 		}
 	}
 
-	/**
-	 * Popup Modal
-	 */
-	namespace PopupModal {
-		interface Content {
-			title: string;
-			/**
-			 * You can specify a string for simple text display
-			 * or a HTML element for interactive config/setting menu,
-			 * or a React JSX element for React-based components
-			 */
-			content: string | Element | React.JSX.Element;
-			/**
-			 * Bigger window
-			 */
-			isLarge?: boolean;
-		}
-
-		function display(e: Content): void;
-		function hide(): void;
-	}
 
 	/** React instance to create components */
 	const React: any;
