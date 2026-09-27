@@ -153,13 +153,15 @@ settings section via the registrar. Everything else stays mounted until #8.
 Vitest (`bun run test`), tests beside the module:
 
 - `settingsSection.view.test.ts` — `parseSeconds` and `formatSeconds` cases from S7–S8.
-- `settings.test.ts` — limits, load-time fallback, `onChange` (S9–S11).
+- `settings.test.ts` — limits, load-time fallback, `onChange` (S10, S11, S17).
 - `waitForClient.test.ts` — immediate resolve, late resolve, timeout message (S3–S4), with an
   injected timer.
 - `contextMenus.test.ts` — label follows duration changes (S13).
+- `index.test.ts` — `load()` registers nothing when readiness fails (S18), with the registrar and
+  context-menu modules mocked.
 
 After `bun run build`: S1 (read the written `metadata.json`). Over CDP after `spicetify apply`: S2,
-S5, S6, S12, S14 and S15.
+S5, S6, S9, S12, S14 and S15.
 
 ## Acceptance Criteria
 
@@ -169,8 +171,8 @@ S5, S6, S12, S14 and S15.
   `{ "stdlib": "^1.13.0" }` and whose `version` equals `package.json`'s `version`.
 - **S2** — The built `index.js` is an ES module with a single export, `load`. It contains no
   readiness polling loop at module top level, and imports stdlib only from `/modules/stdlib/mod.js`
-  and `/modules/stdlib/lib/primitives.js` (not bundled). After `spicetify apply`,
-  `Spicetify.Modules.report.loaded` contains both `stdlib` and `track-playlist-preview`, `stdlib`
+  and `/modules/stdlib/lib/primitives.js` (not bundled). Given stdlib satisfying `^1.13.0` is
+  installed and enabled, after `spicetify apply` `Spicetify.Modules.report.loaded` contains both `stdlib` and `track-playlist-preview`, `stdlib`
   first, and `failed` has no `track-playlist-preview` entry.
 
 **Readiness**
@@ -191,22 +193,30 @@ S5, S6, S12, S14 and S15.
 - **S7** — `formatSeconds`: 15000 → `"15"`, 500 → `"0.5"`, 1250 → `"1.25"`, 0 → `"0"`.
 - **S8** — `parseSeconds(text, 1000)`: `"15"` → 15000; `" 2 "` → 2000; `"0,5"` with min 0 → 500;
   `"1.5"` → 1500; `"0.9"` → `null` (below min); `""`, `"abc"`, `"-1"`, `"1e3"`, `"Infinity"`,
-  `".5"` → `null`. With min 0, `"0"` → 0.
-- **S9** — Given the duration input, when the text parses to a valid value, `getDurationMs()`
-  returns it immediately and the input still shows the typed text; when it parses to `null`,
-  `getDurationMs()` is unchanged. The same holds for the gap input with minimum 0.
+  `".5"` → `null`. With min 0, `"0"` → 0. Rounding happens before the minimum check:
+  `"1.2345"` → 1235; `"0.9996"` → 1000.
+- **S9** — Given the duration input, the input keeps showing every typed string, valid or
+  rejected. When the text parses to a valid value, `getDurationMs()` returns it immediately; when it
+  parses to `null`, `getDurationMs()` is unchanged. Leaving and reopening the Spicetify Settings page
+  shows the stored value via `formatSeconds`, not the rejected text. The same holds for the gap
+  input with minimum 0.
 - **S10** — `setDurationMs` with a value below `MIN_DURATION_MS`, `NaN` or `Infinity`, and `setGapMs`
   with a negative value, `NaN` or `Infinity`, leave the stored JSON and getters unchanged and call
-  no `onChange` listener. Accepted values persist and call each listener exactly once.
+  no `onChange` listener. Every accepted setter call persists and then calls each listener exactly
+  once; when a listener runs, the stored JSON already holds the new value.
 - **S11** — Given stored JSON with `durationMs 0` and `gapMs -5`, loading settings yields
-  `durationMs 15000` and `gapMs 0` (defaults), while the stored `enabled` flags are kept.
+  `durationMs 15000` and `gapMs 0` (defaults), while the stored `enabled` flags are kept. Each field
+  falls back on its own: given `durationMs 0` and `gapMs 2000`, loading yields `durationMs 15000`
+  and `gapMs 2000`; given `durationMs 8000` and `gapMs "x"`, it yields `durationMs 8000` and
+  `gapMs 0`.
 - **S12** — The profile menu contains no *Track & Playlist Preview* item, and `src/` contains no
   reference to `Spicetify.Menu` or `Spicetify.PopupModal` (grep).
 
 **Live label**
 
 - **S13** — After the duration is set to 10000 ms, the track context-menu item reads
-  *Preview track (10s)* without a restart, and *Preview from here* is unchanged.
+  *Preview track (10s)* without a restart, and *Preview from here* is unchanged. The label uses
+  `Math.round(durationMs / 1000)`: after 10500 ms it reads *Preview track (11s)*.
 
 **Compatibility and unload**
 
@@ -215,6 +225,14 @@ S5, S6, S12, S14 and S15.
 - **S15** — After `Spicetify.Modules.disable("track-playlist-preview")`, the Spicetify Settings page
   no longer shows the **Track & Playlist Preview** section.
 - **S16** — Only `src/ui/settingsSection.tsx` imports a `/modules/stdlib/` path (grep).
+
+**Change notification and readiness failure**
+
+- **S17** — `setEnabled` with any collection type calls each `onChange` listener exactly once, after
+  persisting. After the function returned by `onChange(listener)` is called, no later accepted
+  setter call invokes that listener; other listeners are still called.
+- **S18** — Given `waitForClient` rejects, `load()` rejects without registering the settings
+  section or any context-menu item.
 
 ## Deferred Items
 
@@ -314,6 +332,6 @@ Required Task 2 (glossary) and Task 3 (ADRs) do not apply: no `CONTEXT.md`, no A
 >
 > ### Before finishing the branch (advisory cross-model review)
 >
-> After the final build passes — and before wrapping up via `superpowers:finishing-a-development-branch` — if a cross-model review helper is available (e.g. the Codex plugin's adversarial review), run it with focus: *"Judge correctness against the spec's acceptance criteria (S1–S16) only. Do not flag anything outside the stated criteria — no design alternatives, hardening, or scope the spec did not claim."*
+> After the final build passes — and before wrapping up via `superpowers:finishing-a-development-branch` — if a cross-model review helper is available (e.g. the Codex plugin's adversarial review), run it with focus: *"Judge correctness against the spec's acceptance criteria (S1–S18) only. Do not flag anything outside the stated criteria — no design alternatives, hardening, or scope the spec did not claim."*
 >
 > This **never gates a merge** — the gate stays `bun run check` plus `bun run build`; the review only flags what deserves a second look. If no helper is available, finish the branch without it.
