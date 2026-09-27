@@ -242,16 +242,28 @@ the "hard to reverse" and "surprising" criteria. No conflict with ADR 0001.
 
 ## Manual Operator Steps
 
-None beyond the usual: after `bun run build`, run `spicetify apply` (restarts Spotify). stdlib
-1.13.0 is installed on the development machine. Whether `spicetify apply` fetches a missing
-declared dependency for a hand-copied module is unverified, so the README states the requirement
-(stdlib ≥ 1.13.0 installed) instead of relying on it.
+None beyond the usual: after `bun run build`, run `spicetify apply` (restarts Spotify).
+
+stdlib needs no manual install. Verified in CLI source (tag `v3.0.0-beta.19`):
+
+- `commands/apply.rs` `stage_modules` calls `pkg::ensure_system_modules` on every apply.
+  `SYSTEM_MODULES = ["stdlib", "store", "manager"]` are installed when absent and refreshed to the
+  registry's latest when outdated. This is best-effort: with the registry unreachable it warns and
+  continues, and a system module the user disabled while installed stays off.
+- The `dependencies` field is not what installs stdlib; apply never reads it. The loader
+  (`modularLoader/registry.ts` `checkDependencies`) enforces it at boot: a missing dependency fails
+  the module with "`track-playlist-preview needs stdlib, which is not installed`", and a version
+  outside the range fails with "`… needs stdlib@^1.13.0, installed is X`", both visible in
+  `Spicetify.Modules.report.failed`.
+
+So the README states the dependency and the one situation that breaks it (stdlib disabled), not an
+install step.
 
 ## Documentation Updates
 
 | Doc | Change |
 | --- | --- |
-| `README.md` | Settings: profile menu → **Spicetify Settings** → **Track & Playlist Preview**; table units in seconds, duration minimum 1 s; note the stdlib dependency under Install. |
+| `README.md` | Settings: profile menu → **Spicetify Settings** → **Track & Playlist Preview**; table units in seconds, duration minimum 1 s; under Install, note the module depends on stdlib ≥ 1.13.0, which `spicetify apply` installs and keeps current, and that disabling stdlib stops this module loading. |
 | `CLAUDE.md` | Build items 3 (readiness wrapper replaced by capped `waitForClient` in `load()`) and 4 (metadata declares stdlib); add a Documentation pointer row to this spec; replace the `ui/` architecture mention of settings if it names the modal. |
 | `docs/specs/2026-07-22-track-playlist-preview-design.md` | Mark AC42 superseded by S5/S12, and the "Settings: opened from a `Spicetify.Menu.Item`" line and the `ui/settingsModal` module row, each pointing here. |
 | `docs/specs/2026-07-25-preview-modal-design.md` | Annotate the Layering note "so the settings modal covers them when opened mid-session (AC42)" as moot, pointing here. |
