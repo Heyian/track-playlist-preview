@@ -5,12 +5,18 @@ type OnClick = (uris: string[], uids: string[] | undefined, contextUri: string |
 
 // Captures every ContextMenu.Item built by register(), keyed by its label.
 let items: Map<string, OnClick>;
+// Every Item instance in construction order; `name` is mutable like the real setter.
+let built: { name: string }[];
 
 beforeEach(() => {
   items = new Map();
+  built = [];
   class Item {
+    name: string;
     constructor(name: string, onClick: OnClick) {
+      this.name = name;
       items.set(name, onClick);
+      built.push(this);
     }
     register(): void {}
   }
@@ -29,6 +35,7 @@ function deps(overrides: Partial<ContextMenuDeps> = {}): ContextMenuDeps {
     onPreviewFromHere: vi.fn(),
     getDurationMs: () => 15000,
     currentCollectionUri: () => null,
+    onSettingsChange: () => () => {},
     ...overrides,
   };
 }
@@ -53,5 +60,46 @@ describe("Preview from here", () => {
     createContextMenus(d).register();
     items.get("Preview from here")!(["spotify:track:t"], undefined, null);
     expect(d.onPreviewFromHere).toHaveBeenCalledWith("spotify:track:t", undefined);
+  });
+});
+
+describe("Preview track label (S13)", () => {
+  function setup() {
+    let duration = 15000;
+    let listener: () => void = () => {};
+    const d = deps({
+      getDurationMs: () => duration,
+      onSettingsChange: (l) => {
+        listener = l;
+        return () => {};
+      },
+    });
+    createContextMenus(d).register();
+    const [, previewTrack, previewFromHere] = built;
+    return {
+      previewTrack: previewTrack!,
+      previewFromHere: previewFromHere!,
+      change: (ms: number) => {
+        duration = ms;
+        listener();
+      },
+      notify: () => listener(),
+    };
+  }
+
+  it("follows the duration setting without re-registering", () => {
+    const m = setup();
+    expect(m.previewTrack.name).toBe("Preview track (15s)");
+    m.change(10000);
+    expect(m.previewTrack.name).toBe("Preview track (10s)");
+    m.change(10500);
+    expect(m.previewTrack.name).toBe("Preview track (11s)");
+    expect(m.previewFromHere.name).toBe("Preview from here");
+  });
+
+  it("stays put when a change leaves the duration alone", () => {
+    const m = setup();
+    m.notify();
+    expect(m.previewTrack.name).toBe("Preview track (15s)");
   });
 });

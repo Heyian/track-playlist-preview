@@ -10,6 +10,8 @@ export interface ContextMenuDeps {
   getDurationMs(): number;
   /** The collection URI of the page currently shown, or null. */
   currentCollectionUri(): string | null;
+  /** Subscribe to settings changes; returns an unsubscribe function. */
+  onSettingsChange(listener: () => void): () => void;
 }
 
 export function createContextMenus(deps: ContextMenuDeps) {
@@ -36,9 +38,9 @@ export function createContextMenus(deps: ContextMenuDeps) {
       const isSingleTrack = (uris: string[]): boolean =>
         uris.length === 1 && Spicetify.URI.isTrack(uris[0]!);
 
-      const trackLabel = `Preview track (${Math.round(deps.getDurationMs() / 1000)}s)`;
+      const trackLabel = (): string => `Preview track (${Math.round(deps.getDurationMs() / 1000)}s)`;
       const previewTrack = new Spicetify.ContextMenu.Item(
-        trackLabel,
+        trackLabel(),
         (uris) => {
           if (uris[0]) deps.onPreviewTrack(uris[0]);
         },
@@ -46,6 +48,10 @@ export function createContextMenus(deps: ContextMenuDeps) {
         "play",
       );
       previewTrack.register();
+      // The name setter relabels a registered item in place (S13).
+      deps.onSettingsChange(() => {
+        previewTrack.name = trackLabel();
+      });
 
       const previewFromHere = new Spicetify.ContextMenu.Item(
         "Preview from here",

@@ -108,6 +108,7 @@ async function main(): Promise<void> {
     onPreviewFromHere: (uri, contextUri) => void controller.startFromHere(uri, contextUri),
     getDurationMs: () => settings.getDurationMs(),
     currentCollectionUri: () => currentCollectionUri(),
+    onSettingsChange: (listener) => settings.onChange(listener),
   });
 
   actionBar.start();
