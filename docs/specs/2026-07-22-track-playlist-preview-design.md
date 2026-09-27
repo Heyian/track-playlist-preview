@@ -124,7 +124,7 @@ the adapter line is pure and unit-testable without a running client.
 | `ui/playbarControls` | Registers/deregisters Skip and Stop. | `Spicetify.Playbar` |
 | `ui/contextMenus` | Track and collection context-menu items. | `Spicetify.ContextMenu`, `Spicetify.URI` |
 | `ui/rowHighlight` | Highlights the currently-previewing row. | DOM |
-| `ui/settingsModal` | Settings UI. | `Spicetify.PopupModal`, `Spicetify.React` |
+| `ui/settingsModal` | Settings UI. _Superseded by `ui/settingsSection` — see S5/S12 of [the Settings-page spec](2026-09-27-settings-page-design.md)._ | `Spicetify.PopupModal`, `Spicetify.React` |
 
 ### Data flow
 
@@ -156,6 +156,8 @@ unresolved) so a 397-track collection is never resolved upfront.
   track context menu with *Preview track (15s)* and *Preview from here*.
 - **Settings:** opened from a `Spicetify.Menu.Item` in the profile dropdown. Toggles per collection
   type (playlist / Liked Songs / album / artist), preview duration, inter-track gap.
+  _Superseded: settings now live on the Spicetify Settings page — S5/S12 of
+  [the Settings-page spec](2026-09-27-settings-page-design.md)._
 
 ### Design constraints
 
@@ -317,6 +319,7 @@ when the user stops it, when it is replaced by a new session, or when it aborts 
 
 - **AC42** — The settings modal is reachable from a `Spicetify.Menu.Item` in the profile dropdown,
   and exposes preview duration, inter-track gap, and one toggle per collection type.
+  _Superseded by S5/S12 of [the Settings-page spec](2026-09-27-settings-page-design.md)._
 - **AC43** — Settings persist across a Spotify restart.
 - **AC44** — With no stored settings, defaults apply: 15 000 ms duration, 0 ms gap, all four
   collection types enabled.
