@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toPanelView, panelKeyAction, progressFraction, panelPlacement, PANEL_KEYS } from "./previewPanel.view";
+import { toPanelView, panelKeyAction, progressFraction, panelPlacement, placementStyle, PANEL_KEYS } from "./previewPanel.view";
 import type { TrackRef } from "../types/domain";
 
 const song: TrackRef = { uri: "spotify:track:s", name: "Song", artist: "Band", artworkUrl: "u" };
@@ -280,5 +280,33 @@ describe("panelPlacement", () => {
     expect(centre(nav)).toEqual({ position: "centre", topClearancePx: 72 });
     expect(centre(null).topClearancePx).toBe(72);
     expect(centre({ bottom: 80 }).topClearancePx).toBe(88);
+  });
+});
+
+describe("placementStyle", () => {
+  it("right → right/bottom/ceiling vars, stack above", () => {
+    expect(placementStyle({ position: "right", rightPx: 16, bottomPx: 104, topClearancePx: 72 })).toEqual({
+      position: "right",
+      stack: "above",
+      vars: { "--tpp-panel-right": "16px", "--tpp-panel-bottom": "104px", "--tpp-top-clearance": "72px" },
+    });
+  });
+
+  it("playbar (P6 result) → right/top/ceiling vars, stack below", () => {
+    expect(
+      placementStyle({ position: "playbar", rightPx: 86, topPx: 72, stack: "below", topClearancePx: 72 }),
+    ).toEqual({
+      position: "playbar",
+      stack: "below",
+      vars: { "--tpp-panel-right": "86px", "--tpp-panel-top": "72px", "--tpp-top-clearance": "72px" },
+    });
+  });
+
+  it("centre → ceiling var only, stack above", () => {
+    expect(placementStyle({ position: "centre", topClearancePx: 72 })).toEqual({
+      position: "centre",
+      stack: "above",
+      vars: { "--tpp-top-clearance": "72px" },
+    });
   });
 });

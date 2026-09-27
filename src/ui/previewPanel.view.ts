@@ -144,3 +144,39 @@ export function panelPlacement(i: {
   // Left of the Playbar's column; raised clear of the bottom-centre notice.
   return { position, rightPx: innerWidth - bar.left + EDGE_GAP_PX, bottomPx: FALLBACK_BOTTOM_PX, topClearancePx: topBar };
 }
+
+/** What `place()` writes to the root: `data-position`, `data-stack` and CSS variables. */
+export interface PlacementStyle {
+  position: PanelPosition;
+  stack: StackSide;
+  vars: Partial<Record<"--tpp-panel-right" | "--tpp-panel-bottom" | "--tpp-panel-top" | "--tpp-top-clearance", string>>;
+}
+
+/** Turns a placement into the root's attributes and variables; previewPanel.css anchors from them. */
+export function placementStyle(p: PanelPlacement): PlacementStyle {
+  const px = (n: number): string => `${n}px`;
+  switch (p.position) {
+    case "right":
+      return {
+        position: p.position,
+        stack: "above",
+        vars: {
+          "--tpp-panel-right": px(p.rightPx),
+          "--tpp-panel-bottom": px(p.bottomPx),
+          "--tpp-top-clearance": px(p.topClearancePx),
+        },
+      };
+    case "playbar":
+      return {
+        position: p.position,
+        stack: p.stack,
+        vars: {
+          "--tpp-panel-right": px(p.rightPx),
+          "--tpp-panel-top": px(p.topPx),
+          "--tpp-top-clearance": px(p.topClearancePx),
+        },
+      };
+    case "centre":
+      return { position: p.position, stack: "above", vars: { "--tpp-top-clearance": px(p.topClearancePx) } };
+  }
+}

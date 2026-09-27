@@ -4,11 +4,13 @@
  * z-index 50: above page content, below PopupModal's overlay (z 100) — spike p1. */
 
 #tpp-preview-root {
-  /* --tpp-panel-right, --tpp-panel-bottom and --tpp-top-clearance are
-   * overwritten inline at each open() from the measured Playbar placement
-   * (spec: Layering → Placement). */
+  /* --tpp-panel-right, --tpp-panel-bottom, --tpp-panel-top and
+   * --tpp-top-clearance, plus data-position and data-stack, are written by
+   * place() at each open() and on every settings change, from the measured
+   * Playbar and nav (panel spec: Layering → Placement; panel-position spec). */
   --tpp-panel-right: 16px;
   --tpp-panel-bottom: 104px;
+  --tpp-panel-top: 16px;
   /* Fixed, so the stack's anchor doesn't move when the panel closes.
    * Keep in sync with PANEL_HEIGHT_PX (previewPanel.view.ts). */
   --tpp-panel-height: 384px;
@@ -161,4 +163,42 @@
   min-width: 0;
   font-size: 0.875rem;
   overflow-wrap: anywhere;
+}
+
+/* The rules above are the Right edge placement; they also apply before the
+ * first place(). Each override below sets the anchor it does not use to auto,
+ * so no stale anchor survives a switch (panel-position spec, Review Focus 3). */
+
+/* Over the Playbar: panel anchored by right + top (spec: Geometry). */
+#tpp-preview-root[data-position="playbar"] .tpp-panel {
+  bottom: auto;
+  top: var(--tpp-panel-top);
+}
+
+#tpp-preview-root[data-position="playbar"][data-stack="above"] .tpp-removals-stack {
+  top: auto;
+  bottom: calc(100vh - var(--tpp-panel-top) + 8px);
+  max-height: calc(var(--tpp-panel-top) - 8px - var(--tpp-top-clearance));
+}
+
+#tpp-preview-root[data-position="playbar"][data-stack="below"] .tpp-removals-stack {
+  bottom: auto;
+  top: calc(var(--tpp-panel-top) + var(--tpp-panel-height) + 8px);
+  max-height: calc(100vh - var(--tpp-panel-top) - var(--tpp-panel-height) - 8px - 16px);
+}
+
+/* Window centre: centred in CSS, so it follows a resize (D6). */
+#tpp-preview-root[data-position="centre"] .tpp-panel {
+  right: auto;
+  bottom: auto;
+  left: calc(50% - 140px);
+  top: calc(50% - var(--tpp-panel-height) / 2);
+}
+
+#tpp-preview-root[data-position="centre"] .tpp-removals-stack {
+  right: auto;
+  top: auto;
+  left: calc(50% - 140px);
+  bottom: calc(50% + var(--tpp-panel-height) / 2 + 8px);
+  max-height: calc(50vh - var(--tpp-panel-height) / 2 - 8px - var(--tpp-top-clearance));
 }
