@@ -27,15 +27,25 @@ function classify(uri: string): CollectionType | null {
 function setup(overrides: Partial<ControllerDeps> = {}) {
   let active = false;
   let current: TrackRef | null = null;
+  let q: TrackRef[] = [];
+  let index = 0;
   const engine = {
-    start: vi.fn((q: TrackRef[], i = 0) => {
+    start: vi.fn((queue: TrackRef[], i = 0) => {
       active = true;
+      q = queue;
+      index = i;
       current = q[i] ?? null;
     }),
-    skip: vi.fn(),
+    // Like the real engine: synchronous advance; past the end the session ends.
+    skip: vi.fn(() => {
+      if (!active) return;
+      index += 1;
+      current = q[index] ?? null;
+      if (current === null) active = false;
+    }),
     stop: vi.fn(),
     isActive: vi.fn(() => active),
-    currentIndex: vi.fn(() => 0),
+    currentIndex: vi.fn(() => index),
     currentTrack: vi.fn(() => (active ? current : null)),
   };
   const coordinator = { acquire: vi.fn(), release: vi.fn(), isActive: vi.fn(() => false) };
@@ -194,7 +204,7 @@ describe("previewController", () => {
     expect(t.engine.stop).not.toHaveBeenCalled();
   });
 
-  it("AC52: next() empties the bar then skips; idle → nothing", async () => {
+  it("AC52: next() skips, then shows the next entry with an empty bar; idle → nothing", async () => {
     const t = setup();
     t.controller.next();
     expect(t.engine.skip).not.toHaveBeenCalled();
@@ -202,11 +212,20 @@ describe("previewController", () => {
 
     await t.controller.startCollection(P, 0);
     t.emit({ type: "trackStarted", index: 0, total: 3, track: a });
-    const started = lastUpdate(t.panel);
     t.controller.next();
-    expect(lastUpdate(t.panel)).toEqual({ ...started, progress: "empty" });
     expect(t.engine.skip).toHaveBeenCalledTimes(1);
-    expect(t.panel.update.mock.invocationCallOrder.at(-1)!).toBeLessThan(t.engine.skip.mock.invocationCallOrder[0]!);
+    // AC49/AC53: the panel names the new current entry at once, bar empty.
+    expect(lastUpdate(t.panel)).toMatchObject({ heading: "Bravo — Bob", sourceText: "From: Chill Mix · 2/3", progress: "empty" });
+    expect(t.panel.update.mock.invocationCallOrder.at(-1)!).toBeGreaterThan(t.engine.skip.mock.invocationCallOrder[0]!);
+  });
+
+  it("AC55: next() past the last entry doesn't update a panel the session end closed", async () => {
+    const t = setup();
+    await t.controller.startFromHere(c.uri, P);
+    const updates = t.panel.update.mock.calls.length;
+    t.controller.next();
+    expect(t.engine.skip).toHaveBeenCalledTimes(1);
+    expect(t.panel.update.mock.calls.length).toBe(updates);
   });
 
   it("R1: literal true canRemove gives a Remove label; metadata read once per session", async () => {
@@ -284,7 +303,19 @@ describe("previewController", () => {
     expect(t.pendingRemovals.schedule).toHaveBeenCalledWith("spotify:playlist:P", "Chill Mix", a);
     expect(t.engine.skip).toHaveBeenCalledTimes(1);
     expect(t.pendingRemovals.schedule.mock.invocationCallOrder[0]!).toBeLessThan(t.engine.skip.mock.invocationCallOrder[0]!);
-    expect(lastUpdate(t.panel)).toEqual({ ...started, progress: "empty" });
+    expect(lastUpdate(t.panel)).toEqual({ ...started, heading: "Bravo — Bob", artworkUrl: "art-b", sourceText: "From: Chill Mix · 2/3", progress: "empty" });
+  });
+
+  it("R6: a quick second removeCurrent removes the entry the panel shows", async () => {
+    const t = setup();
+    await t.controller.startCollection(P, 0);
+    t.emit({ type: "trackStarted", index: 0, total: 3, track: a });
+    t.controller.removeCurrent();
+    const shown = lastUpdate(t.panel);
+    expect(shown).toMatchObject({ heading: "Bravo — Bob", removeLabel: "Remove from Chill Mix" });
+    t.controller.removeCurrent(); // before b's trackStarted arrives
+    expect(t.pendingRemovals.schedule).toHaveBeenLastCalledWith(P, "Chill Mix", b);
+    expect(lastUpdate(t.panel)).toMatchObject({ heading: "Charlie — Cy", sourceText: "From: Chill Mix · 3/3", nextDisabled: true });
   });
 
   it("R15 name: a playlist with no name uses the generic label for removals", async () => {

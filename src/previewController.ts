@@ -38,6 +38,8 @@ interface Session extends SessionContext {
   type: CollectionType | null;
   /** pendingRemovals.marker() at session start (R13b). */
   marker: number;
+  /** Queue length, for the i/N counter between engine events. */
+  total: number;
 }
 
 export function createPreviewController(deps: ControllerDeps) {
@@ -123,7 +125,7 @@ export function createPreviewController(deps: ControllerDeps) {
     if (isStale(seq)) return; // a later start or stop superseded this one
 
     // Bound before engine.start: the engine consults isExcluded synchronously (R13).
-    session = { collectionUri, type, label, removable, marker: deps.pendingRemovals.marker() };
+    session = { collectionUri, type, label, removable, marker: deps.pendingRemovals.marker(), total: queue.length };
     deps.coordinator.acquire(); // AC24 (no-op if a session is being replaced — AC27)
     deps.onActiveCollection(collectionUri);
     lastView = toPanelView({
@@ -139,8 +141,15 @@ export function createPreviewController(deps: ControllerDeps) {
   }
 
   function advance(): void {
-    if (lastView) show({ ...lastView, progress: "empty" }); // AC53: no full-bar hold on Next/Remove
     deps.engine.skip();
+    // Show the new current entry at once rather than waiting for its
+    // trackStarted, so the heading and Remove never name the entry just left
+    // (R6). AC53: bar empty, no full-bar hold. Past the last entry the session
+    // has already ended and closed the panel.
+    const track = deps.engine.currentTrack();
+    if (session && deps.engine.isActive() && track !== null) {
+      show(toPanelView({ state: "playing", track, index: deps.engine.currentIndex(), total: session.total, session, progress: "empty" }));
+    }
   }
 
   function stop(): void {
