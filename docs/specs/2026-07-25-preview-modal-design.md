@@ -136,10 +136,11 @@ the top 64 px full-width; `Root__now-playing-bar` then occupies roughly `top 56,
 1473, right 1893` at a 1909×1143 window; `Root__right-sidebar` occupies `top 472, bottom 1135` in
 the same column). Confirmed via `[data-testid="now-playing-bar"]` / `.main-nowPlayingBar-*`, which
 report the same right-docked geometry (inner box `1481,64 → 1885,464`). There is no full-width
-element pinned to the window's bottom edge. Consequence for this spec: a panel docked at the right
-edge with `bottom: 16px` (or the probe's `bottom: 120px`) sits well below the playing-bar's vertical
-range and does not intersect it (AC70 holds), but "the Playbar" is a right-docked block, not a
-footer — code and comments should call the selector by name rather than assume bottom placement.
+element pinned to the window's bottom edge. Consequence for this spec: "the Playbar" is a
+right-docked block in this layout, not a footer, and other layouts may dock it at the bottom
+instead — a single fixed `bottom` offset for the panel is not safe across layouts. The panel must
+measure `.Root__now-playing-bar` at open time and choose its offset accordingly; see
+**Architecture → Layering → Placement** for the exact rule (AC70 holds either way).
 
 The notistack container is found at `.notistack-Snackbar` (also matched by `[class*="notistack"]`,
 `#notistack-snackbar` did not match). During `Spicetify.showNotification("probe")` its bounding box
@@ -235,6 +236,19 @@ Elsewhere, keys reach Spotify untouched (AC66).
 **Layering.** The panel and the pending-removals stack mount in one body-level root. They sit
 above the page and below `PopupModal`'s overlay (z 100), so the settings modal covers them when
 opened mid-session (AC42). They don't intersect the Playbar or the bottom-centre notice area (AC70).
+
+**Placement.** Per **Spike results → p2**, `.Root__now-playing-bar` is bottom-docked in some
+layouts and top-right-docked in others (`global-nav-centered`), so a fixed `bottom: 16px` cannot be
+assumed safe in general — it happens to clear the top-right-docked case but would sit under a
+bottom-docked Playbar. The panel therefore measures the Playbar at open time and picks its offset
+accordingly: read `.Root__now-playing-bar`'s `getBoundingClientRect()`; if it is bottom-docked
+(`rect.bottom >= window.innerHeight - 8`), set the panel's `bottom` to
+`window.innerHeight - rect.top + 16` px so the panel sits just above it; otherwise (top-right-docked,
+or any other non-bottom placement) use `bottom: 16px`. If the selector is missing entirely, fall
+back to `bottom: 104px`. The right edge stays `right: 16px` and the panel stays ~280 px wide in
+either layout. This keeps the panel clear of both the Playbar and the bottom-centre notice area
+(AC70) regardless of layout.
+
 Styling comes from Spotify's CSS custom properties (e.g. `--background-elevated-base`, `--text-base`,
 `--text-subdued`) and, for buttons, classes read off a live `[data-encore-id="buttonTertiary"]`
 sibling, as `actionBarButton` already does. No `e-NNNNN` class is hardcoded (`CLAUDE.md`).
@@ -274,7 +288,7 @@ natively.
 ┌───────────────────────┐
 │                    ✕  │
 │  ┌─────────────────┐  │
-│  │    artwork      │  │   ~280 px wide, right edge, above the Playbar
+│  │    artwork      │  │   ~280 px wide, right edge
 │  └─────────────────┘  │
 │  Title — Artist       │
 │  From: Chill Mix 4/37 │
@@ -282,6 +296,9 @@ natively.
 │ [■ Stop][⏭ Next]  [− Remove] │
 └───────────────────────┘
 ```
+
+Vertical offset is not a fixed "above the Playbar" spot — it's set by the Playbar's measured
+placement at open time. See Layering → Placement above and Spike results → p2 below.
 
 - Artwork (neutral placeholder when `artworkUrl` is absent), `Title — Artist`.
 - `From: <collection name> · i/N`. Single-track session → single-track indicator, no counter.
