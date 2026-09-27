@@ -43,7 +43,9 @@ interface Session extends SessionContext {
 export function createPreviewController(deps: ControllerDeps) {
   let session: Session | null = null;
   let lastView: PanelView | null = null;
-  let startSeq = 0; // bumped per beginSession; a stale start returns (later start wins)
+  // Bumped at the top of every start and by stop(). A start whose seq has moved
+  // on after any await returns, so the latest start or stop wins (Review focus 1).
+  let startSeq = 0;
 
   function show(view: PanelView): void {
     lastView = view;
@@ -100,18 +102,25 @@ export function createPreviewController(deps: ControllerDeps) {
     }
   }
 
-  async function beginSession(queue: TrackRef[], startIndex: number, collectionUri: string | null): Promise<void> {
+  const isStale = (seq: number): boolean => seq !== startSeq;
+
+  async function beginSession(
+    seq: number,
+    queue: TrackRef[],
+    startIndex: number,
+    collectionUri: string | null,
+  ): Promise<void> {
+    if (isStale(seq)) return;
     if (queue.length === 0) {
       deps.notify.info("Nothing to preview"); // AC8/AC46: no pause, no audio, no panel
       return;
     }
-    const seq = ++startSeq;
     const type = collectionUri === null ? null : deps.collectionTypeForUri(collectionUri);
     const [label, removable] = await Promise.all([
       collectionUri !== null && type !== null ? resolveLabel(collectionUri, type) : Promise.resolve(null),
       collectionUri !== null && type === "playlist" ? isRemovable(collectionUri) : Promise.resolve(false),
     ]);
-    if (seq !== startSeq) return; // a later start superseded this one
+    if (isStale(seq)) return; // a later start or stop superseded this one
 
     // Bound before engine.start: the engine consults isExcluded synchronously (R13).
     session = { collectionUri, type, label, removable, marker: deps.pendingRemovals.marker() };
@@ -134,55 +143,66 @@ export function createPreviewController(deps: ControllerDeps) {
     deps.engine.skip();
   }
 
+  function stop(): void {
+    startSeq += 1; // cancels any pending start
+    deps.engine.stop();
+  }
+
+  async function startTrack(uri: string): Promise<void> {
+    const seq = ++startSeq;
+    const ref = await deps.fetchTrackRef(uri); // AC36 single-track
+    await beginSession(seq, [ref], 0, null);
+  }
+
+  async function startCollection(uri: string, startIndex = 0): Promise<void> {
+    const seq = ++startSeq;
+    let queue: TrackRef[];
+    try {
+      queue = await deps.enumerate(uri);
+    } catch {
+      if (!isStale(seq)) deps.notify.error("Preview unavailable — Spotify API error");
+      return;
+    }
+    await beginSession(seq, queue, startIndex, uri);
+  }
+
   return {
     onEvent,
-    async startCollection(uri: string, startIndex = 0): Promise<void> {
-      let queue: TrackRef[];
-      try {
-        queue = await deps.enumerate(uri);
-      } catch {
-        deps.notify.error("Preview unavailable — Spotify API error");
-        return;
-      }
-      await beginSession(queue, startIndex, uri);
-    },
-    async startTrack(uri: string): Promise<void> {
-      const ref = await deps.fetchTrackRef(uri); // AC36 single-track
-      await beginSession([ref], 0, null);
-    },
+    startCollection,
+    startTrack,
     async startFromHere(uri: string, contextUri?: string): Promise<void> {
       // AC36: within a collection, start at this track inside the full queue.
       // AC37: outside a collection context, fall back to a single-track preview.
       const type = contextUri ? deps.collectionTypeForUri(contextUri) : null;
       if (!contextUri || type === null) {
-        await this.startTrack(uri);
+        await startTrack(uri);
         return;
       }
+      const seq = ++startSeq;
       let queue: TrackRef[];
       try {
         queue = await deps.enumerate(contextUri);
       } catch {
-        deps.notify.error("Preview unavailable — Spotify API error");
+        if (!isStale(seq)) deps.notify.error("Preview unavailable — Spotify API error");
         return;
       }
+      if (isStale(seq)) return;
       const index = queue.findIndex((t) => t.uri === uri);
       if (index < 0) {
-        await this.startTrack(uri);
+        await startTrack(uri); // takes a fresh seq; this start is still the latest
         return;
       }
-      await beginSession(queue, index, contextUri); // R4: contextUri is the source playlist
+      await beginSession(seq, queue, index, contextUri); // R4: contextUri is the source playlist
     },
     toggleCollection(uri: string): void {
       // AC34: clicking the action-bar button during this collection's session stops it.
       if (session?.collectionUri === uri && deps.engine.isActive()) {
-        deps.engine.stop();
+        stop();
       } else {
-        void this.startCollection(uri, 0);
+        void startCollection(uri, 0);
       }
     },
-    stop(): void {
-      deps.engine.stop();
-    },
+    stop,
     /** AC52: advance immediately; no-op when idle. */
     next(): void {
       if (!deps.engine.isActive()) return;

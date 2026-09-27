@@ -339,4 +339,54 @@ describe("previewController", () => {
     expect(t.panel.open).toHaveBeenCalledTimes(1);
     expect(t.coordinator.acquire).toHaveBeenCalledTimes(1);
   });
+  it("Review focus 1: a slow earlier enumeration loses to a later start that finished first", async () => {
+    let resolveA!: (q: TrackRef[]) => void;
+    const enumerate = vi.fn((uri: string) =>
+      uri === ARTIST ? new Promise<TrackRef[]>((r) => (resolveA = r)) : Promise.resolve([c, b]),
+    );
+    const t = setup({ enumerate });
+    const startA = t.controller.startCollection(ARTIST, 0);
+    await t.controller.startCollection("spotify:playlist:B", 0);
+    expect(t.engine.start).toHaveBeenCalledTimes(1);
+    resolveA(queue);
+    await startA;
+    expect(t.engine.start).toHaveBeenCalledTimes(1);
+    expect(t.engine.start).toHaveBeenCalledWith([c, b], 0);
+    expect(t.panel.open).toHaveBeenCalledTimes(1);
+  });
+
+  it("Review focus 1: an empty-queue start supersedes an in-flight earlier start", async () => {
+    let resolveA!: (q: TrackRef[]) => void;
+    const enumerate = vi.fn((uri: string) =>
+      uri === ARTIST ? new Promise<TrackRef[]>((r) => (resolveA = r)) : Promise.resolve([]),
+    );
+    const t = setup({ enumerate });
+    const startA = t.controller.startCollection(ARTIST, 0);
+    await t.controller.startCollection(ALBUM, 0);
+    expect(t.notify.info).toHaveBeenCalledWith("Nothing to preview");
+    resolveA(queue);
+    await startA;
+    expect(t.engine.start).not.toHaveBeenCalled();
+    expect(t.panel.open).not.toHaveBeenCalled();
+    expect(t.coordinator.acquire).not.toHaveBeenCalled();
+  });
+
+  it("stop() cancels a pending start", async () => {
+    let resolveB!: (m: PlaylistMetadata) => void;
+    const B = "spotify:playlist:B";
+    const metadata = vi.fn((uri: string) =>
+      uri === B ? new Promise<PlaylistMetadata>((r) => (resolveB = r)) : Promise.resolve({ canRemove: true }),
+    );
+    const t = setup({ playlistMetadata: metadata });
+    await t.controller.startCollection(P, 0); // A playing
+    expect(t.engine.start).toHaveBeenCalledTimes(1);
+    const startB = t.controller.startCollection(B, 0);
+    await vi.waitFor(() => expect(metadata).toHaveBeenCalledWith(B));
+    t.controller.stop();
+    expect(t.engine.stop).toHaveBeenCalledTimes(1);
+    resolveB({ canRemove: true });
+    await startB;
+    expect(t.engine.start).toHaveBeenCalledTimes(1);
+    expect(t.panel.open).toHaveBeenCalledTimes(1);
+  });
 });
