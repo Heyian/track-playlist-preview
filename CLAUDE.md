@@ -35,6 +35,7 @@ There is no linter. `bun run check` is the whole gate.
   Undo window and exclusion, criteria R1–R16.
 - [Settings-page spec](docs/specs/2026-09-27-settings-page-design.md) — settings on the Spicetify
   Settings page, the `load(ctx)` entry, criteria S1–S18.
+- [Panel-position spec](docs/specs/2026-09-27-panel-position-design.md) — the Panel position setting (Right edge / Over the Playbar / Window centre), criteria P1–P20.
 - [Spicetify v3 platform notes](docs/spicetify-v3-platform.md) — read before relying on how the
   CLI, loader or stdlib behave: installs, dependencies, load order and readiness, Settings page,
   devtools. Record new verified findings there.
