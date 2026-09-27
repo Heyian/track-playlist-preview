@@ -93,9 +93,16 @@ These are load-bearing; violating any is a defect. Full rationale in the spec's 
 
 ## Debugging against the live client
 
-Spotify is built on Chromium (CEF), so once `spicetify dev` has enabled developer mode it exposes the
-Chrome DevTools Protocol on `127.0.0.1:8088`. Driving `Runtime.evaluate` over that socket is far faster than clicking through
-the UI, and is how every internal-API finding in the spec was verified.
+Spotify is built on Chromium (CEF) and exposes the Chrome DevTools Protocol on `127.0.0.1:8088`
+when launched with a debug-port flag — `spicetify dev` alone does not open it. Driving
+`Runtime.evaluate` over that socket is far faster than clicking through the UI, and is how every
+internal-API finding in the spec was verified.
+
+- **Starting a feature:** before the first code change, make sure `~/.config/spicetify/config-xpui.ini`
+  has `spotify_launch_flags = --remote-debugging-port=8088` (add or fill in the line under
+  `[Setting]`), run `spicetify apply`, and confirm `curl -s 127.0.0.1:8088/json/version` answers.
+- **Finishing a feature** (merged, PR opened, or branch kept): ask the user whether to remove the
+  flag. On yes, clear it and run `spicetify apply`.
 
 The committed harness is `scripts/cdp-eval.mjs`:
 `node scripts/cdp-eval.mjs 'Spicetify.Player.isPlaying()'`.
