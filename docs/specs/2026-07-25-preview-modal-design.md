@@ -238,16 +238,18 @@ above the page and below `PopupModal`'s overlay (z 100), so the settings modal c
 opened mid-session (AC42). They don't intersect the Playbar or the bottom-centre notice area (AC70).
 
 **Placement.** Per **Spike results → p2**, `.Root__now-playing-bar` is bottom-docked in some
-layouts and top-right-docked in others (`global-nav-centered`), so a fixed `bottom: 16px` cannot be
-assumed safe in general — it happens to clear the top-right-docked case but would sit under a
-bottom-docked Playbar. The panel therefore measures the Playbar at open time and picks its offset
-accordingly: read `.Root__now-playing-bar`'s `getBoundingClientRect()`; if it is bottom-docked
-(`rect.bottom >= window.innerHeight - 8`), set the panel's `bottom` to
-`window.innerHeight - rect.top + 16` px so the panel sits just above it; otherwise (top-right-docked,
-or any other non-bottom placement) use `bottom: 16px`. If the selector is missing entirely, fall
-back to `bottom: 104px`. The right edge stays `right: 16px` and the panel stays ~280 px wide in
-either layout. This keeps the panel clear of both the Playbar and the bottom-centre notice area
-(AC70) regardless of layout.
+layouts and top-right-docked in others (`global-nav-centered`, where it spans y 56–472). At each
+open the panel measures its `getBoundingClientRect()` and picks one of four placements; the stack
+always shares the panel's `right` and sits 8 px above it, growing up to a ceiling. (1) Selector
+missing: `right 16`, `bottom 104`. (2) Bottom-docked (`rect.bottom >= innerHeight - 8`): `right 16`,
+`bottom = innerHeight - rect.top + 16`. (3) Not bottom-docked and the 384 px panel fits below it
+(`innerHeight - rect.bottom - 8 - 16 >= 384`): `right 16`, `bottom 16`, stack ceiling
+`rect.bottom + 8`. (4) Not bottom-docked and it doesn't fit: left of the Playbar's column,
+`right = innerWidth - rect.left + 16`, and `bottom 104` so the panel clears the bottom-centre notice
+(at 1280×800 the notice spans x 517–763, y 724–772, which a `bottom 16` panel at x 548–828 would
+hit). Outside case 3 the stack ceiling is `.Root__globalNav`'s bottom + 8, or 72 px without it. The
+panel stays 280 px wide. This keeps the panel and stack clear of both the Playbar and the notice
+(AC70).
 
 Styling comes from Spotify's CSS custom properties (e.g. `--background-elevated-base`, `--text-base`,
 `--text-subdued`) and, for buttons, classes read off a live `[data-encore-id="buttonTertiary"]`

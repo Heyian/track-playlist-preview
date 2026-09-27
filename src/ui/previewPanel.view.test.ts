@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toPanelView, panelKeyAction, progressFraction, PANEL_KEYS } from "./previewPanel.view";
+import { toPanelView, panelKeyAction, progressFraction, panelPlacement, PANEL_KEYS } from "./previewPanel.view";
 import type { TrackRef } from "../types/domain";
 
 const song: TrackRef = { uri: "spotify:track:s", name: "Song", artist: "Band", artworkUrl: "u" };
@@ -130,5 +130,55 @@ describe("progressFraction", () => {
     expect(progressFraction({ elapsedMs: 3000, clipDurationMs: NaN }, 15000)).toBeCloseTo(0.2);
     expect(progressFraction({ elapsedMs: 99999, clipDurationMs: 30000 }, 15000)).toBe(1);
     expect(progressFraction(null, 15000)).toBe(0);
+  });
+});
+
+describe("panelPlacement", () => {
+  // Live rects from the global-nav-centered layout (task 11 S9/S9b).
+  const topDockedBar = { top: 56, bottom: 472, left: 844 };
+  const nav = { bottom: 64 };
+
+  it("AC70: no Playbar element → bottom 104, right 16, top-bar clearance", () => {
+    expect(panelPlacement({ bar: null, nav, innerWidth: 1280, innerHeight: 800 })).toEqual({
+      rightPx: 16,
+      bottomPx: 104,
+      topClearancePx: 72,
+    });
+  });
+
+  it("AC70: bottom-docked Playbar → panel 16 px above it", () => {
+    const bar = { top: 712, bottom: 800, left: 0 };
+    expect(panelPlacement({ bar, nav, innerWidth: 1280, innerHeight: 800 })).toEqual({
+      rightPx: 16,
+      bottomPx: 104,
+      topClearancePx: 72,
+    });
+  });
+
+  it("AC70: top-docked Playbar with room below → right column, stack ceiling under the Playbar", () => {
+    const bar = { top: 56, bottom: 472, left: 514 };
+    expect(panelPlacement({ bar, nav, innerWidth: 950, innerHeight: 1143 })).toEqual({
+      rightPx: 16,
+      bottomPx: 16,
+      topClearancePx: 480,
+    });
+  });
+
+  it("AC70: the fit check is exact: 472 + 8 + 384 + 16 = 880", () => {
+    expect(panelPlacement({ bar: topDockedBar, nav, innerWidth: 1280, innerHeight: 880 }).rightPx).toBe(16);
+    expect(panelPlacement({ bar: topDockedBar, nav, innerWidth: 1280, innerHeight: 879 }).rightPx).not.toBe(16);
+  });
+
+  it("AC70: top-docked Playbar without room below → left of its column, above the notice area", () => {
+    expect(panelPlacement({ bar: topDockedBar, nav, innerWidth: 1280, innerHeight: 800 })).toEqual({
+      rightPx: 1280 - 844 + 16,
+      bottomPx: 104,
+      topClearancePx: 72,
+    });
+  });
+
+  it("AC70: top-bar clearance falls back to 72 px without a global nav", () => {
+    expect(panelPlacement({ bar: topDockedBar, nav: null, innerWidth: 1280, innerHeight: 800 }).topClearancePx).toBe(72);
+    expect(panelPlacement({ bar: topDockedBar, nav: { bottom: 80 }, innerWidth: 1280, innerHeight: 800 }).topClearancePx).toBe(88);
   });
 });

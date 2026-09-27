@@ -4,18 +4,22 @@
  * z-index 50: above page content, below PopupModal's overlay (z 100) — spike p1. */
 
 #tpp-preview-root {
-  /* Overwritten inline at each open() from the measured Playbar placement. */
+  /* --tpp-panel-right, --tpp-panel-bottom and --tpp-top-clearance are
+   * overwritten inline at each open() from the measured Playbar placement
+   * (spec: Layering → Placement). */
+  --tpp-panel-right: 16px;
   --tpp-panel-bottom: 104px;
-  /* Fixed, so the stack's anchor doesn't move when the panel closes. */
+  /* Fixed, so the stack's anchor doesn't move when the panel closes.
+   * Keep in sync with PANEL_HEIGHT_PX (previewPanel.view.ts). */
   --tpp-panel-height: 384px;
   --tpp-stack-bottom: calc(var(--tpp-panel-bottom) + var(--tpp-panel-height) + 8px);
-  /* Clear of Spotify's 64 px top bar, plus a gap. */
+  /* Stack ceiling: under the top bar, or under a top-docked Playbar. */
   --tpp-top-clearance: 72px;
 }
 
 .tpp-panel {
   position: fixed;
-  right: 16px;
+  right: var(--tpp-panel-right);
   bottom: var(--tpp-panel-bottom);
   width: 280px;
   height: var(--tpp-panel-height);
@@ -129,7 +133,7 @@
 
 .tpp-removals-stack {
   position: fixed;
-  right: 16px;
+  right: var(--tpp-panel-right);
   bottom: var(--tpp-stack-bottom);
   width: 280px;
   max-height: calc(100vh - var(--tpp-stack-bottom) - var(--tpp-top-clearance));

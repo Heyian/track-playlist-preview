@@ -6,7 +6,7 @@
 import React from "react";
 import type { PanelPort, PanelView, ProgressMode } from "../types/domain";
 import type { PendingRemovalEntry } from "../pendingRemovals";
-import { panelKeyAction, PANEL_KEYS } from "./previewPanel.view";
+import { panelKeyAction, panelPlacement, PANEL_KEYS, type PanelPlacement } from "./previewPanel.view";
 import { PendingRemovalsStack, tertiaryClass } from "./pendingRemovalsStack";
 import "./previewPanel.css";
 
@@ -26,21 +26,13 @@ export interface PreviewPanelDeps {
 
 const ROOT_ID = "tpp-preview-root";
 const PLAYBAR = ".Root__now-playing-bar";
-const EDGE_GAP_PX = 16;
-const BOTTOM_DOCK_TOLERANCE_PX = 8;
-const NO_PLAYBAR_BOTTOM_PX = 104;
+const GLOBAL_NAV = ".Root__globalNav";
 
-/**
- * Panel `bottom` offset (spec: Layering → Placement). A bottom-docked Playbar
- * puts the panel 16 px above it; any other placement (e.g. the top-right dock of
- * `global-nav-centered`) uses 16 px; no Playbar element at all falls back to 104 px.
- */
-function panelBottomPx(): number {
-  const bar = document.querySelector(PLAYBAR);
-  if (!bar) return NO_PLAYBAR_BOTTOM_PX;
-  const rect = bar.getBoundingClientRect();
-  const bottomDocked = rect.bottom >= window.innerHeight - BOTTOM_DOCK_TOLERANCE_PX;
-  return bottomDocked ? window.innerHeight - rect.top + EDGE_GAP_PX : EDGE_GAP_PX;
+/** Measures the Playbar and global nav, then applies the placement rule (spec: Layering → Placement). */
+function measurePlacement(): PanelPlacement {
+  const bar = document.querySelector(PLAYBAR)?.getBoundingClientRect() ?? null;
+  const nav = document.querySelector(GLOBAL_NAV)?.getBoundingClientRect() ?? null;
+  return panelPlacement({ bar, nav, innerWidth: window.innerWidth, innerHeight: window.innerHeight });
 }
 
 function Icon(props: { name: Spicetify.Icon }): React.ReactElement {
@@ -258,7 +250,10 @@ export function createPreviewPanel(deps: PreviewPanelDeps): PanelPort {
   return {
     open(view: PanelView): void {
       // Placement is measured per open(); the stack's anchor derives from it in CSS.
-      rootEl.style.setProperty("--tpp-panel-bottom", `${panelBottomPx()}px`);
+      const place = measurePlacement();
+      rootEl.style.setProperty("--tpp-panel-right", `${place.rightPx}px`);
+      rootEl.style.setProperty("--tpp-panel-bottom", `${place.bottomPx}px`);
+      rootEl.style.setProperty("--tpp-top-clearance", `${place.topClearancePx}px`);
       const s = store.get();
       store.set({ view, focusSeq: s.focusSeq + 1 });
     },
