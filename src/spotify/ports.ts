@@ -1,15 +1,27 @@
 // src/spotify/ports.ts
 // Thin bindings from injected ports to live Spicetify/DOM globals. No logic —
 // the logic lives in the pure modules these feed.
-import type { AudioPort, AudioHandlers, TimerPort, TimerId, PlaylistMetadataPort, RemovePort } from "../types/domain";
+import type {
+  AudioPort,
+  AudioHandlers,
+  TimerPort,
+  TimerId,
+  PlaylistMetadataPort,
+  RemovePort,
+  ProgressSource,
+} from "../types/domain";
 import type { TrackPreviewRequest } from "../previewSource";
 import type { PlayerPort } from "../playerCoordinator";
 import type { StoragePort } from "../settings";
 import type { CollectionDeps, UriMatcher } from "../collections";
 import type { ArtistOverviewApi } from "../collections/artist";
 
-/** A single reused <Audio> element fed clip URLs. */
-export function createAudioPort(): AudioPort {
+/**
+ * A single reused <Audio> element fed clip URLs. Also exposes progress
+ * (elapsed/duration) via `sample()`, which the engine never sees — only the
+ * panel controller reads it (spec purity note).
+ */
+export function createAudioPort(): AudioPort & ProgressSource {
   const el = new Audio();
   el.preload = "auto";
   let handlers: AudioHandlers | null = null;
@@ -26,6 +38,10 @@ export function createAudioPort(): AudioPort {
       el.pause();
       el.removeAttribute("src");
       el.load();
+    },
+    sample() {
+      if (handlers === null) return null;
+      return { elapsedMs: el.currentTime * 1000, clipDurationMs: el.duration * 1000 };
     },
   };
 }

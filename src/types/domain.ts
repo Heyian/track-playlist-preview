@@ -75,3 +75,36 @@ export type EngineEvent =
   | { type: "sessionEnded"; skipped: number; reason: EndReason };
 
 export type EngineListener = (event: EngineEvent) => void;
+
+/** How the panel's progress bar should render (AC53/AC61). */
+export type ProgressMode = "live" | "full" | "empty";
+
+/** Everything the preview panel needs to render one entry. */
+export interface PanelView {
+  state: "playing" | "skipping";
+  heading: string; // "Title — Artist", or "Title" when artist is ""
+  artworkUrl: string | null; // null → placeholder (always null when skipping)
+  sourceText: string; // "From: Chill Mix · 4/37" or "Single track"
+  indicator: string | null; // "No preview — skipping" when skipping
+  nextDisabled: boolean; // current entry is the last queue entry
+  removeLabel: string | null; // "Remove from Chill Mix"; null → no Remove button
+  progress: ProgressMode;
+}
+
+/** Adapter surface for the panel UI. Never "modal" / "popup" / "player". */
+export interface PanelPort {
+  open(view: PanelView): void;
+  update(view: PanelView): void;
+  close(): void;
+}
+
+/** A single elapsed/duration reading from the audio element. */
+export interface ProgressSample {
+  elapsedMs: number;
+  clipDurationMs: number;
+}
+
+/** Reads current playback progress. `sample()` is null while no clip is loaded. */
+export interface ProgressSource {
+  sample(): ProgressSample | null;
+}
