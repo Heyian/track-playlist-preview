@@ -54,8 +54,12 @@ export function createPendingRemovals(deps: PendingRemovalsDeps) {
     entry.status = "inFlight";
     entry.timerId = null;
     notify();
-    deps
-      .remove(entry.playlistUri, entry.trackUri)
+    // Promise.resolve().then(...) defers the call so a synchronous throw from
+    // deps.remove (e.g. the live binding when PlaylistAPI/.remove is missing)
+    // still lands in .catch() below instead of escaping the timer callback
+    // and leaving the entry stuck inFlight forever.
+    Promise.resolve()
+      .then(() => deps.remove(entry.playlistUri, entry.trackUri))
       .then(() => {
         marker += 1; // R13: state changed — a marker taken now no longer excludes T
         entry.status = "succeeded";

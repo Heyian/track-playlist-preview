@@ -17,13 +17,14 @@ function setup(removeImpl?: (playlistUri: string, trackUri: string) => Promise<v
 }
 
 describe("pendingRemovals", () => {
-  it("R9: no call before the deadline; one URI-form call when it fires", () => {
+  it("R9: no call before the deadline; one URI-form call when it fires", async () => {
     const h = setup();
     h.pr.schedule(P, "Chill Mix", a);
     expect(h.remove).not.toHaveBeenCalled();
     const [id] = h.timer.ids();
     expect(h.timer.msOf(id!)).toBe(UNDO_WINDOW_MS);
     h.timer.fire(id!);
+    await tick();
     expect(h.remove).toHaveBeenCalledExactlyOnceWith(P, "spotify:track:a");
   });
 
@@ -43,7 +44,7 @@ describe("pendingRemovals", () => {
     expect(h.pr.undo(handle2)).toBe(false); // resolved
   });
 
-  it("R12: two removals of the same URI are independent", () => {
+  it("R12: two removals of the same URI are independent", async () => {
     const h = setup();
     const h1 = h.pr.schedule(P, "Chill Mix", a);
     const h2 = h.pr.schedule(P, "Chill Mix", a);
@@ -51,6 +52,7 @@ describe("pendingRemovals", () => {
     const [, id2] = h.timer.ids();
     expect(h.pr.undo(h1)).toBe(true);
     h.timer.fire(id2!);
+    await tick();
     expect(h.remove).toHaveBeenCalledExactlyOnceWith(P, "spotify:track:a");
   });
 
@@ -71,7 +73,9 @@ describe("pendingRemovals", () => {
     const [id] = h.timer.ids();
     h.timer.fire(id!);
     expect(h.pr.isExcluded(P, a.uri, m0)).toBe(true); // in flight
+    const mMid = h.pr.marker(); // captured while still in flight
     await tick();
+    expect(h.pr.isExcluded(P, a.uri, mMid)).toBe(true); // in-flight-session marker, after success
     expect(h.pr.isExcluded(P, a.uri, m0)).toBe(true); // succeeded, session started before it
     const m2 = h.pr.marker();
     expect(h.pr.isExcluded(P, a.uri, m2)).toBe(false); // session started after success
@@ -91,7 +95,20 @@ describe("pendingRemovals", () => {
     h.timer.fire(id2!);
     await tick(); // rejects
     expect(h.pr.isExcluded(P, a.uri, m0)).toBe(false);
-    expect(h2).not.toBeUndefined();
+    expect(h.pr.undo(h2)).toBe(false); // already settled (failed)
+  });
+
+  it("a synchronous throw from deps.remove is routed to the failure path, not left in flight", async () => {
+    const h = setup(() => {
+      throw new Error("PlaylistAPI missing");
+    });
+    const m0 = h.pr.marker();
+    h.pr.schedule(P, "Chill Mix", a);
+    const [id] = h.timer.ids();
+    h.timer.fire(id!);
+    await tick();
+    expect(h.onError).toHaveBeenCalledExactlyOnceWith("Title", "Chill Mix");
+    expect(h.pr.isExcluded(P, a.uri, m0)).toBe(false);
   });
 
   it("R15: a rejected commit reports the captured title and playlist name, no retry", async () => {
