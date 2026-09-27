@@ -1,12 +1,13 @@
 // src/ui/previewPanel.tsx
 // The preview panel (AC46–AC53, AC61, AC66, AC68, AC70) and the pending-removals
-// stack, rendered into one body-level React root. A pure consumer of controller
+// stack, rendered into one body-level React root, placed per Panel position
+// (panel-position spec, P1–P20). A pure consumer of controller
 // calls: it renders a PanelView and calls back through PreviewPanelDeps. No
 // Spicetify.Player, no PopupModal (spec: Layering, spike p1).
 import React from "react";
-import type { PanelPort, PanelView, ProgressMode } from "../types/domain";
+import type { PanelPort, PanelPosition, PanelView, ProgressMode } from "../types/domain";
 import type { PendingRemovalEntry } from "../pendingRemovals";
-import { panelKeyAction, panelPlacement, PANEL_KEYS, type PanelPlacement } from "./previewPanel.view";
+import { panelKeyAction, panelPlacement, placementStyle, PANEL_KEYS, type PanelPlacement } from "./previewPanel.view";
 import { PendingRemovalsStack, tertiaryClass } from "./pendingRemovalsStack";
 import "./previewPanel.css";
 
@@ -22,17 +23,20 @@ export interface PreviewPanelDeps {
     subscribe(l: () => void): () => void;
     undo(handle: number): boolean;
   };
+  getPanelPosition(): PanelPosition;
+  /** Subscribes to every settings change; returns an unsubscribe function. */
+  onSettingsChange(listener: () => void): () => void;
 }
 
 const ROOT_ID = "tpp-preview-root";
 const PLAYBAR = ".Root__now-playing-bar";
 const GLOBAL_NAV = ".Root__globalNav";
 
-/** Measures the Playbar and global nav, then applies the placement rule (spec: Layering → Placement). */
-function measurePlacement(): PanelPlacement {
+/** Measures the Playbar and global nav now, then applies the position's placement rule (spec: Geometry). */
+function measurePlacement(position: PanelPosition): PanelPlacement {
   const bar = document.querySelector(PLAYBAR)?.getBoundingClientRect() ?? null;
   const nav = document.querySelector(GLOBAL_NAV)?.getBoundingClientRect() ?? null;
-  return panelPlacement({ position: "right", bar, nav, innerWidth: window.innerWidth, innerHeight: window.innerHeight });
+  return panelPlacement({ position, bar, nav, innerWidth: window.innerWidth, innerHeight: window.innerHeight });
 }
 
 function Icon(props: { name: Spicetify.Icon }): React.ReactElement {
@@ -247,15 +251,20 @@ export function createPreviewPanel(deps: PreviewPanelDeps): PanelPort {
   // Spike p1: createRoot is the render API (not ReactDOM.render).
   Spicetify.ReactDOM.createRoot(rootEl).render(<PreviewRoot store={store} deps={deps} />);
 
+  /** Writes the measured placement to the root; never touches focus or the store (P12). */
+  function place(): void {
+    const style = placementStyle(measurePlacement(deps.getPanelPosition()));
+    for (const [name, value] of Object.entries(style.vars)) rootEl.style.setProperty(name, value);
+    rootEl.dataset.position = style.position;
+    rootEl.dataset.stack = style.stack;
+  }
+  // Re-place on every settings change, open or closed (D3). Unsubscribe on unload is #8.
+  deps.onSettingsChange(place);
+
   return {
     open(view: PanelView): void {
       // Placement is measured per open(); the stack's anchor derives from it in CSS.
-      const place = measurePlacement();
-      if (place.position === "right") {
-        rootEl.style.setProperty("--tpp-panel-right", `${place.rightPx}px`);
-        rootEl.style.setProperty("--tpp-panel-bottom", `${place.bottomPx}px`);
-        rootEl.style.setProperty("--tpp-top-clearance", `${place.topClearancePx}px`);
-      }
+      place();
       const s = store.get();
       store.set({ view, focusSeq: s.focusSeq + 1 });
     },

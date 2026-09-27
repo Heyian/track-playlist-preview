@@ -78,6 +78,8 @@ function wire(): Settings {
     onRemove: () => controller.removeCurrent(),
     progress: () => progressFraction(audio.sample(), settings.getDurationMs()),
     removals: pendingRemovals,
+    getPanelPosition: () => settings.getPanelPosition(),
+    onSettingsChange: (listener) => settings.onChange(listener),
   });
   const engine = createPreviewEngine({
     audio,
