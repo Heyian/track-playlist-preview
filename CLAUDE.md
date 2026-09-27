@@ -34,7 +34,7 @@ There is no linter. `bun run check` is the whole gate.
 - [Remove-from-playlist spec](docs/specs/2026-09-26-remove-from-playlist-design.md) — Remove, the
   Undo window and exclusion, criteria R1–R16.
 - [Settings-page spec](docs/specs/2026-09-27-settings-page-design.md) — settings on the Spicetify
-  Settings page, the `load(ctx)` entry, criteria S1–S16.
+  Settings page, the `load(ctx)` entry, criteria S1–S18.
 - [Spicetify v3 platform notes](docs/spicetify-v3-platform.md) — read before relying on how the
   CLI, loader or stdlib behave: installs, dependencies, load order and readiness, Settings page,
   devtools. Record new verified findings there.
@@ -48,12 +48,15 @@ was removed. It does four things worth knowing:
    Import them normally; never add them as dependencies. Bundling a second React breaks hooks.
 2. Inlines imported CSS into the output JS as an injected `<style>` — a sibling `.css` file would
    never be loaded.
-3. Wraps output in a loop awaiting `Spicetify.React`, `ReactDOM` and `Platform`. Other namespaces
-   (`ContextMenu`, `GraphQL`, `Snackbar`) still need checking before use.
+3. Emits an ES module whose only export is `load(ctx)`; there is no readiness wrapper. `load()`
+   awaits a capped `waitForClient` (`READY_TIMEOUT_MS`) for `Spicetify.React`, `ContextMenu` and
+   `Platform`. Other namespaces (`GraphQL`, `Snackbar`) still need checking before use.
+   `/modules/stdlib/*` imports stay external.
 4. Writes `index.js` and a `metadata.json` generated from `package.json` into
    `<config>/modules/track-playlist-preview/`. v3 ignores the v2 `Extensions/` folder and rejects
    `spicetify -c`; the modules folder is parsed from `spicetify path`, falling back to
-   `~/.config/spicetify/modules`.
+   `~/.config/spicetify/modules`. `metadata.json` declares stdlib from `package.json`
+   `spicetify.dependencies`.
 
 The bundler does **not** typecheck. A green build says nothing about types — run `bun run check`.
 
@@ -83,6 +86,8 @@ These are load-bearing; violating any is a defect. Full rationale in the spec's 
   `Spicetify.SVGIcons[name]` and pass that. Under v3, stdlib's compat shim injects an icon string
   verbatim as SVG innerHTML, so a bare name like `"skip-forward"` renders an empty element. The
   preview panel's controls still rely on this.
+- **Only `ui/settingsSection.tsx` imports `/modules/stdlib/`** — type imports included; `index.ts`
+  takes `ModuleRuntimeContext` from it.
 - **Never use `Spicetify.PopupModal` for an in-session surface.** Notices render beneath it; use
   the panel instead (see the [panel spec](docs/specs/2026-07-25-preview-modal-design.md)).
 
