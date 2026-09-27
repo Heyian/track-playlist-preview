@@ -1,7 +1,7 @@
 // scripts/cdp-eval.mjs
 // Evaluate a JS expression in the running Spotify renderer via the Chrome
-// DevTools Protocol. Spotify exposes CDP on 127.0.0.1:8088 when
-// `always_enable_devtools = 1` is set in the Spicetify config.
+// DevTools Protocol. Spotify exposes CDP on 127.0.0.1:8088 once
+// `spicetify dev` has enabled developer mode.
 //
 //   node scripts/cdp-eval.mjs 'Spicetify.Player.isPlaying()'
 //   node scripts/cdp-eval.mjs "$(cat probe.js)"

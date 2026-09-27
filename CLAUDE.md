@@ -83,8 +83,8 @@ These are load-bearing; violating any is a defect. Full rationale in the spec's 
 
 ## Debugging against the live client
 
-Spotify is Electron, so with `always_enable_devtools = 1` it exposes the Chrome DevTools Protocol on
-`127.0.0.1:8088`. Driving `Runtime.evaluate` over that socket is far faster than clicking through
+Spotify is built on Chromium (CEF), so once `spicetify dev` has enabled developer mode it exposes the
+Chrome DevTools Protocol on `127.0.0.1:8088`. Driving `Runtime.evaluate` over that socket is far faster than clicking through
 the UI, and is how every internal-API finding in the spec was verified.
 
 The committed harness is `scripts/cdp-eval.mjs`:
