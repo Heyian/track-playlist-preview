@@ -6,6 +6,7 @@ export interface TrackRef {
   uri: string;
   name: string;
   artist: string;
+  artworkUrl?: string;
 }
 
 export type CollectionType = "playlist" | "likedSongs" | "album" | "artist";

@@ -2,6 +2,7 @@
 // (top-tracks only, ~10 entries). The caller supplies the request function so
 // this module stays free of Spicetify.
 import type { TrackRef } from "../types/domain";
+import { pickArtwork } from "./eligibility";
 
 export type ArtistOverviewApi = (uri: string) => Promise<unknown>;
 
@@ -16,6 +17,7 @@ interface OverviewShape {
               name?: string;
               artists?: { items?: { profile?: { name?: string } }[] };
               playability?: { playable?: boolean };
+              albumOfTrack?: { coverArt?: { sources?: { url?: string }[] } };
             };
           }[];
         };
@@ -36,6 +38,7 @@ export async function enumerateArtist(uri: string, request: ArtistOverviewApi): 
       uri: track.uri,
       name: track.name ?? "",
       artist: track.artists?.items?.map((a) => a.profile?.name ?? "").filter(Boolean).join(", ") ?? "",
+      artworkUrl: pickArtwork(track.albumOfTrack?.coverArt?.sources),
     });
   }
   return out;

@@ -53,4 +53,13 @@ describe("enumeratePlaylistContents", () => {
     const refs = await enumeratePlaylistContents("spotify:playlist:p", pagedApi(all, 100));
     expect(refs).toHaveLength(150);
   });
+
+  it("AC59: artworkUrl comes from album.images", async () => {
+    const all = [track("a", { album: { images: [{ url: "spotify:image:std", label: "standard" }] } })];
+    expect((await enumeratePlaylistContents("spotify:playlist:p", pagedApi(all, 100)))[0]!.artworkUrl).toBe("spotify:image:std");
+  });
+
+  it("AC59: no album images → artworkUrl undefined", async () => {
+    expect((await enumeratePlaylistContents("spotify:playlist:p", pagedApi([track("a")], 100)))[0]!.artworkUrl).toBeUndefined();
+  });
 });

@@ -27,4 +27,13 @@ describe("enumerateLikedSongs", () => {
     const refs = await enumerateLikedSongs(pagedLibrary(all, 100));
     expect(refs.map((r) => r.uri)).toEqual(["spotify:track:ok"]);
   });
+
+  it("AC59: artworkUrl comes from album.images", async () => {
+    const all = [track("a", { album: { images: [{ url: "spotify:image:std", label: "standard" }] } })];
+    expect((await enumerateLikedSongs(pagedLibrary(all, 100)))[0]!.artworkUrl).toBe("spotify:image:std");
+  });
+
+  it("AC59: no album images → artworkUrl undefined", async () => {
+    expect((await enumerateLikedSongs(pagedLibrary([track("a")], 100)))[0]!.artworkUrl).toBeUndefined();
+  });
 });
