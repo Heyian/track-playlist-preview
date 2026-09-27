@@ -218,8 +218,9 @@ when the user stops it, when it is replaced by a new session, or when it aborts 
 - **AC7** — For every collection type, the preview queue's order and membership are unaffected by
   the page's active sort order or search filter.
 - **AC8** — Given enumeration produces no eligible tracks, a "Nothing to preview" Snackbar is shown
-  and no session starts: Spotify is not paused, no audio plays, and no Playbar controls are
-  registered.
+  and no session starts: Spotify is not paused, no audio plays, and no panel opens. *(Amended by
+  `2026-07-25-preview-modal-design.md` AC46: the "Playbar controls are registered" clause is struck
+  and replaced with "no panel opens".)*
 
 **Preview source**
 
@@ -233,8 +234,10 @@ when the user stops it, when it is replaced by a new session, or when it aborts 
 - **AC12** — Given a 397-track collection, the first preview begins playing before every track in
   the collection has had its clip URL resolved.
 - **AC13** — Given a `trackPreview` request fails, the session aborts: preview audio halts, a
-  "Preview unavailable — Spotify API error" Snackbar is shown, Playbar controls are deregistered,
-  and Spotify is resumed if and only if it was playing before the session started.
+  "Preview unavailable — Spotify API error" Snackbar is shown, the panel closes with
+  `sessionEnded`, and Spotify is resumed if and only if it was playing before the session started.
+  *(Amended by `2026-07-25-preview-modal-design.md` AC55: the "Playbar controls are deregistered"
+  clause is struck and replaced with "the panel closes with `sessionEnded`".)*
 
 **Engine**
 
@@ -285,8 +288,9 @@ when the user stops it, when it is replaced by a new session, or when it aborts 
   sibling it was copied from, and contains no encore version string written in source. Given the
   action bar is absent, or present with no such sibling, no button and no error UI appear, and
   injection is attempted again on the next navigation.
-- **AC33** — Skip and Stop Playbar buttons are registered while a session is active and absent when
-  idle.
+- **AC33** — *Superseded by `2026-07-25-preview-modal-design.md` AC57: no Playbar buttons are
+  registered for a preview session; the preview panel provides Skip/Stop instead.* ~~Skip and Stop
+  Playbar buttons are registered while a session is active and absent when idle.~~
 - **AC34** — Clicking the action-bar button during an active session on the same collection
   terminates the session.
 - **AC35** — Given a collection type is enabled, the collection context-menu item appears for that
@@ -297,8 +301,10 @@ when the user stops it, when it is replaced by a new session, or when it aborts 
   containing collection.
 - **AC37** — *Preview from here* invoked outside a collection context falls back to a single-track
   preview.
-- **AC38** — When each preview starts, a Snackbar shows `Title — Artist (i/N)`, where *i* is the
-  track's one-based index in the preview queue and *N* is that queue's total length.
+- **AC38** — *Superseded by `2026-07-25-preview-modal-design.md` AC56: while the panel is open, this
+  per-track Snackbar notice is suppressed.* ~~When each preview starts, a Snackbar shows
+  `Title — Artist (i/N)`, where *i* is the track's one-based index in the preview queue and *N* is
+  that queue's total length.~~
 - **AC39** — While a session is active, the currently previewed track's row is highlighted whenever
   that row is rendered on its collection page. Navigating away removes the highlight from the
   departed page, and session termination removes all highlighting.
