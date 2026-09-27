@@ -29,6 +29,10 @@ There is no linter. `bun run check` is the whole gate.
   boundaries, verified internal-API findings, and acceptance criteria AC1–AC45.
 - [ADR 0001](docs/adr/0001-preview-audio-via-trackpreview-graphql.md) — why preview audio comes from
   the `trackPreview` GraphQL operation instead of driving `Spicetify.Player`.
+- [Preview panel spec](docs/specs/2026-07-25-preview-modal-design.md) — the non-blocking preview
+  panel and pending-removals stack, placement, and acceptance criteria AC46–AC70.
+- [Remove-from-playlist spec](docs/specs/2026-09-26-remove-from-playlist-design.md) — Remove, the
+  Undo window and exclusion, criteria R1–R16.
 
 ## Build
 
@@ -75,7 +79,7 @@ These are load-bearing; violating any is a defect. Full rationale in the spec's 
   verbatim as SVG innerHTML, so a bare name like `"skip-forward"` renders an empty element. The
   preview panel's controls still rely on this.
 - **Never use `Spicetify.PopupModal` for an in-session surface.** Notices render beneath it; use
-  the panel instead (see the panel spec).
+  the panel instead (see the [panel spec](docs/specs/2026-07-25-preview-modal-design.md)).
 
 ## Debugging against the live client
 
