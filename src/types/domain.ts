@@ -19,6 +19,9 @@ export interface PlaylistMetadata {
 
 export type PlaylistMetadataPort = (uri: string) => Promise<PlaylistMetadata>;
 
+/** Commits a single track's removal from a playlist (removes every copy; see R9). */
+export type RemovePort = (playlistUri: string, trackUri: string) => Promise<void>;
+
 export interface PreviewSettings {
   durationMs: number;
   gapMs: number;

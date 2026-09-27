@@ -1,7 +1,7 @@
 // src/spotify/ports.ts
 // Thin bindings from injected ports to live Spicetify/DOM globals. No logic —
 // the logic lives in the pure modules these feed.
-import type { AudioPort, AudioHandlers, TimerPort, TimerId, PlaylistMetadataPort } from "../types/domain";
+import type { AudioPort, AudioHandlers, TimerPort, TimerId, PlaylistMetadataPort, RemovePort } from "../types/domain";
 import type { TrackPreviewRequest } from "../previewSource";
 import type { PlayerPort } from "../playerCoordinator";
 import type { StoragePort } from "../settings";
@@ -70,6 +70,10 @@ export const trackPreviewRequest: TrackPreviewRequest = async (uris) => {
 /** Playlist and album metadata (name, canRemove) both come from PlaylistAPI.getMetadata (spike p4). */
 export const playlistMetadata: PlaylistMetadataPort = (uri) =>
   Spicetify.Platform.PlaylistAPI.getMetadata(uri);
+
+/** R9/spike r1: the URI form (empty uid) removes every copy of the track in one call. */
+export const playlistRemove: RemovePort = (playlistUri, trackUri) =>
+  Spicetify.Platform.PlaylistAPI.remove(playlistUri, [{ uri: trackUri, uid: "" }]);
 
 export const artistOverviewRequest: ArtistOverviewApi = (uri) =>
   Spicetify.GraphQL.Request(Spicetify.GraphQL.Definitions.queryArtistOverview, {

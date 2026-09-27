@@ -1,29 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { createPreviewEngine, type EngineDeps } from "./previewEngine";
 import type { TrackRef, AudioHandlers, EngineEvent } from "./types/domain";
-
-/** Controllable fake timer: tests fire pending callbacks by id. */
-function fakeTimer() {
-  const pending = new Map<number, () => void>();
-  let id = 0;
-  return {
-    port: {
-      setTimeout: (cb: () => void, _ms: number) => {
-        const i = ++id;
-        pending.set(i, cb);
-        return i;
-      },
-      clearTimeout: (i: number) => void pending.delete(i),
-    },
-    fire: (i: number) => {
-      const cb = pending.get(i);
-      pending.delete(i);
-      cb?.();
-    },
-    has: (i: number) => pending.has(i),
-    ids: () => [...pending.keys()],
-  };
-}
+import { fakeTimer } from "./testing/fakeTimer";
 
 /** Fake audio: records play/stop and exposes the last handlers to fire. */
 function fakeAudio() {
