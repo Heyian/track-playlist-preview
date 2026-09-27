@@ -236,6 +236,8 @@ Elsewhere, keys reach Spotify untouched (AC66).
 **Layering.** The panel and the pending-removals stack mount in one body-level root. They sit
 above the page and below `PopupModal`'s overlay (z 100), so the settings modal covers them when
 opened mid-session (AC42). They don't intersect the Playbar or the bottom-centre notice area (AC70).
+_The settings-modal part of this note is moot: settings moved to the Spicetify Settings page and the
+modal was removed — see [the Settings-page spec](2026-09-27-settings-page-design.md)._
 
 **Placement.** Per **Spike results → p2**, `.Root__now-playing-bar` is bottom-docked in some
 layouts and top-right-docked in others (`global-nav-centered`, where it spans y 56–472). At each
