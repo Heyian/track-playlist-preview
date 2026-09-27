@@ -22,11 +22,23 @@ export function PendingRemovalsStack(props: { removals: PreviewPanelDeps["remova
     return removals.subscribe(() => setEntries(removals.list()));
   }, [removals]);
 
+  // AC67: when a row is added and the stack overflows, keep the newest row
+  // (the bottom one, nearest the panel) in view. Only on growth, so an Undo
+  // doesn't jump the user's scroll position.
+  const stackRef = React.useRef<HTMLDivElement>(null);
+  const prevCount = React.useRef(0);
+  React.useLayoutEffect(() => {
+    const grew = entries.length > prevCount.current;
+    prevCount.current = entries.length;
+    const el = stackRef.current;
+    if (grew && el) el.scrollTop = el.scrollHeight;
+  }, [entries.length]);
+
   if (entries.length === 0) return null;
 
   const buttonClass = tertiaryClass();
   return (
-    <div className="tpp-removals-stack" role="status">
+    <div ref={stackRef} className="tpp-removals-stack" role="status">
       {entries.map((e) => (
         <div key={e.handle} className="tpp-removals-row">
           <span className="tpp-removals-text">
