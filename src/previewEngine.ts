@@ -18,6 +18,8 @@ export interface EngineDeps {
   resolve: ResolvePort;
   config: EngineConfigPort;
   emit: EngineListener;
+  /** True when a track must be passed over without resolution, audio or events (R13). */
+  isExcluded?: (uri: string) => boolean;
 }
 
 export function createPreviewEngine(deps: EngineDeps) {
@@ -54,6 +56,9 @@ export function createPreviewEngine(deps: EngineDeps) {
 
   async function playCurrent(gen: number): Promise<void> {
     if (gen !== generation || state !== "previewing") return;
+    // R13: pass over excluded entries with no resolution, audio or events.
+    // A loop, not recursion, so a long excluded run can't grow the stack.
+    while (index < queue.length && deps.isExcluded?.(queue[index]!.uri)) index += 1;
     if (index >= queue.length) {
       endSession("completed");
       return;
@@ -90,6 +95,8 @@ export function createPreviewEngine(deps: EngineDeps) {
 
   function onNormalComplete(gen: number): void {
     if (gen !== generation || state !== "previewing") return;
+    // AC53: report normal completion (duration expiry or natural end) before the gap.
+    deps.emit({ type: "trackCompleted", index, total: queue.length, track: queue[index]! });
     clearTimers();
     deps.audio.stop();
     // AC23: apply the inter-track gap only after normal completion.
@@ -146,6 +153,8 @@ export function createPreviewEngine(deps: EngineDeps) {
     },
     isActive: (): boolean => state === "previewing",
     currentIndex: (): number => index,
+    // R6: the entry while resolving, playing or during the gap; null when idle.
+    currentTrack: (): TrackRef | null => (state === "previewing" ? queue[index] ?? null : null),
   };
 }
 

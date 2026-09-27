@@ -71,6 +71,7 @@ export type EndReason = "completed" | "stopped" | "replaced" | "aborted";
 export type EngineEvent =
   | { type: "trackStarted"; index: number; total: number; track: TrackRef }
   | { type: "trackSkipped"; index: number; total: number; track: TrackRef; reason: SkipReason }
+  | { type: "trackCompleted"; index: number; total: number; track: TrackRef }
   | { type: "sessionEnded"; skipped: number; reason: EndReason };
 
 export type EngineListener = (event: EngineEvent) => void;

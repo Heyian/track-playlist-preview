@@ -20,6 +20,7 @@ function harness(opts: {
   resolve?: (uri: string) => Promise<string | null>;
   duration?: number;
   gap?: number;
+  isExcluded?: (uri: string) => boolean;
 } = {}) {
   const timer = fakeTimer();
   const audio = fakeAudio();
@@ -32,6 +33,7 @@ function harness(opts: {
     resolve: opts.resolve ?? (async (uri) => `url-${uri}`),
     config: { getDurationMs: () => duration, getGapMs: () => gap },
     emit: (e) => void events.push(e),
+    isExcluded: opts.isExcluded,
   };
   const engine = createPreviewEngine(deps);
   return {
@@ -280,5 +282,200 @@ describe("previewEngine", () => {
     expect(started[0]).toMatchObject({ index: 1 });
     expect(h.audio.port.play).toHaveBeenCalledTimes(1);
     expect(h.timer.ids()).toHaveLength(1);
+  });
+
+  it("R13: an excluded entry is not resolved, emits nothing and is not counted", async () => {
+    const resolve = vi.fn(async (uri: string) => `url-${uri}`);
+    const h = harness({ resolve, isExcluded: (uri) => uri === "spotify:track:b" });
+    h.engine.start([track("a"), track("b"), track("c")]);
+    await tick();
+    h.timer.fire(h.timer.ids()[0]!); // finish a → b is excluded, passed over to c
+    await tick();
+    const started = h.events.filter((e) => e.type === "trackStarted");
+    expect(started.map((e: any) => e.index)).toEqual([0, 2]);
+    expect(resolve).not.toHaveBeenCalledWith("spotify:track:b");
+    expect(h.events.some((e: any) => e.track?.uri === "spotify:track:b")).toBe(false);
+    h.timer.fire(h.timer.ids()[0]!); // finish c → end of queue
+    await tick();
+    expect(h.events.at(-1)).toMatchObject({ type: "sessionEnded", reason: "completed", skipped: 0 });
+  });
+
+  it("R13: an excluded starting entry is passed over", async () => {
+    const h = harness({ isExcluded: (uri) => uri === "spotify:track:a" });
+    h.engine.start([track("a"), track("b")]);
+    await tick();
+    expect(h.events[0]).toMatchObject({ type: "trackStarted", index: 1 });
+  });
+
+  it("R13: exclusion is evaluated when the entry is reached", async () => {
+    let excludeB = false;
+    const h = harness({ isExcluded: (uri) => excludeB && uri === "spotify:track:b" });
+    h.engine.start([track("a"), track("b")]);
+    await tick();
+    excludeB = true; // b becomes excluded only after the session started
+    h.timer.fire(h.timer.ids()[0]!); // finish a → b is excluded when reached
+    await tick();
+    expect(h.events.filter((e) => e.type === "trackStarted")).toHaveLength(1);
+    expect(h.events.at(-1)).toMatchObject({ type: "sessionEnded", reason: "completed", skipped: 0 });
+  });
+
+  it("Review focus 3: a later copy of a removed track is passed over", async () => {
+    let excludeA = false;
+    const h = harness({ isExcluded: (uri) => excludeA && uri === "spotify:track:a" });
+    h.engine.start([track("a"), track("b"), track("a")]);
+    await tick();
+    excludeA = true; // the shared uri is excluded only after the first "a" already played
+    h.timer.fire(h.timer.ids()[0]!); // finish a (index 0) → b starts
+    await tick();
+    h.timer.fire(h.timer.ids()[0]!); // finish b → the later "a" (index 2) is excluded, end of queue
+    await tick();
+    const started = h.events.filter((e) => e.type === "trackStarted");
+    expect(started.map((e: any) => e.index)).toEqual([0, 1]);
+    expect(h.events.at(-1)).toMatchObject({ type: "sessionEnded", reason: "completed", skipped: 0 });
+  });
+
+  it("R8: skip with an all-excluded suffix ends completed", async () => {
+    const h = harness({ isExcluded: (uri) => uri === "spotify:track:b" });
+    h.engine.start([track("a"), track("b")]);
+    await tick();
+    h.engine.skip();
+    await tick();
+    expect(h.events.at(-1)).toMatchObject({ type: "sessionEnded", reason: "completed", skipped: 0 });
+  });
+
+  it("AC53: trackCompleted on duration expiry and natural end, not on skip/missing/error", async () => {
+    // duration expiry
+    {
+      const h = harness();
+      h.engine.start([track("a"), track("b")]);
+      await tick();
+      h.timer.fire(h.timer.ids()[0]!);
+      await tick();
+      expect(h.events.filter((e) => e.type === "trackCompleted")).toHaveLength(1);
+      expect(h.events.find((e) => e.type === "trackCompleted")).toMatchObject({ index: 0, total: 2 });
+    }
+    // natural clip end
+    {
+      const h = harness();
+      h.engine.start([track("a"), track("b")]);
+      await tick();
+      h.audio.ended();
+      await tick();
+      expect(h.events.filter((e) => e.type === "trackCompleted")).toHaveLength(1);
+      expect(h.events.find((e) => e.type === "trackCompleted")).toMatchObject({ index: 0, total: 2 });
+    }
+    // skip: no trackCompleted
+    {
+      const h = harness();
+      h.engine.start([track("a"), track("b")]);
+      await tick();
+      h.engine.skip();
+      await tick();
+      expect(h.events.some((e) => e.type === "trackCompleted")).toBe(false);
+    }
+    // missing clip (resolves null): no trackCompleted
+    {
+      const resolve = async (uri: string) => (uri.endsWith("a") ? null : `url-${uri}`);
+      const h = harness({ resolve });
+      h.engine.start([track("a"), track("b")]);
+      await tick();
+      expect(h.events.some((e) => e.type === "trackCompleted")).toBe(false);
+    }
+    // clip error: no trackCompleted
+    {
+      const h = harness();
+      h.engine.start([track("a"), track("b")]);
+      await tick();
+      h.audio.errored();
+      await tick();
+      expect(h.events.some((e) => e.type === "trackCompleted")).toBe(false);
+    }
+  });
+
+  it("R6: currentTrack is the entry while resolving and during the gap; null when idle", async () => {
+    let resolveA: (v: string | null) => void;
+    const pendingA = new Promise<string | null>((res) => {
+      resolveA = res;
+    });
+    const resolve = vi.fn(async (uri: string) => (uri === "spotify:track:a" ? pendingA : `url-${uri}`));
+    const h = harness({ resolve, gap: 400 });
+
+    expect(h.engine.currentTrack()).toBeNull(); // idle before start
+
+    h.engine.start([track("a"), track("b")]);
+    await tick();
+    expect(h.engine.currentTrack()).toEqual(track("a")); // still resolving a
+
+    resolveA!("url-spotify:track:a");
+    await tick();
+    h.timer.fire(h.timer.ids()[0]!); // duration expiry → gap scheduled, no advance yet
+    await tick();
+    expect(h.engine.currentTrack()).toEqual(track("a")); // during the gap, still a
+
+    h.engine.stop();
+    expect(h.engine.currentTrack()).toBeNull();
+  });
+
+  it("R7: after skip during resolution, a late URL plays nothing and emits nothing", async () => {
+    let resolveA: (v: string | null) => void;
+    const pendingA = new Promise<string | null>((res) => {
+      resolveA = res;
+    });
+    const resolve = vi.fn(async (uri: string) => (uri === "spotify:track:a" ? pendingA : `url-${uri}`));
+    const h = harness({ resolve });
+
+    h.engine.start([track("a"), track("b")]); // playCurrent(a) suspends on pendingA
+    await tick();
+    h.engine.skip(); // skip a while its resolution is still in flight
+    await tick(); // b resolves and plays
+
+    const eventsBeforeLate = h.events.length;
+    resolveA!("url-spotify:track:a-late");
+    await tick();
+
+    expect(h.events).toHaveLength(eventsBeforeLate); // late URL emits nothing
+    expect(h.audio.port.play).toHaveBeenCalledTimes(1); // only b played
+  });
+
+  it("R7: after skip during resolution, a late null is not counted", async () => {
+    let resolveA: (v: string | null) => void;
+    const pendingA = new Promise<string | null>((res) => {
+      resolveA = res;
+    });
+    const resolve = vi.fn(async (uri: string) => (uri === "spotify:track:a" ? pendingA : `url-${uri}`));
+    const h = harness({ resolve });
+
+    h.engine.start([track("a"), track("b")]);
+    await tick();
+    h.engine.skip();
+    await tick();
+
+    resolveA!(null); // a's stale resolve settles to "missing" after the skip
+    await tick();
+
+    expect(h.events.some((e) => e.type === "trackSkipped")).toBe(false);
+    h.timer.fire(h.timer.ids()[0]!); // finish b → completed, skipped count unaffected
+    await tick();
+    expect(h.events.at(-1)).toMatchObject({ type: "sessionEnded", reason: "completed", skipped: 0 });
+  });
+
+  it("R7: after skip during resolution, a late rejection does not abort", async () => {
+    let rejectA: (e: unknown) => void;
+    const pendingA = new Promise<string | null>((_res, rej) => {
+      rejectA = rej;
+    });
+    const resolve = vi.fn(async (uri: string) => (uri === "spotify:track:a" ? pendingA : `url-${uri}`));
+    const h = harness({ resolve });
+
+    h.engine.start([track("a"), track("b")]);
+    await tick();
+    h.engine.skip();
+    await tick();
+
+    rejectA!(new Error("stale GraphQL failure"));
+    await tick();
+
+    expect(h.engine.isActive()).toBe(true);
+    expect(h.events.some((e) => e.type === "sessionEnded" && e.reason === "aborted")).toBe(false);
   });
 });
