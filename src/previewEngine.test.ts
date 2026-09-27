@@ -392,6 +392,22 @@ describe("previewEngine", () => {
     }
   });
 
+  it("AC53: trackCompleted comes after the clip is stopped and its timer cleared, before the gap is scheduled", async () => {
+    const h = harness({ gap: 3000 });
+    h.engine.start([track("a"), track("b")]);
+    await tick();
+    const seen: { stops: number; timers: number }[] = [];
+    const push = h.events.push.bind(h.events);
+    h.events.push = (...e: EngineEvent[]) => {
+      if (e[0]?.type === "trackCompleted") seen.push({ stops: h.audio.port.stop.mock.calls.length, timers: h.timer.ids().length });
+      return push(...e);
+    };
+    const stopsBefore = h.audio.port.stop.mock.calls.length;
+    h.audio.ended();
+    expect(seen).toEqual([{ stops: stopsBefore + 1, timers: 0 }]);
+    expect(h.timer.ids()).toHaveLength(1); // the gap, scheduled after the event
+  });
+
   it("R6: currentTrack is the entry while resolving and during the gap; null when idle", async () => {
     let resolveA: (v: string | null) => void;
     const pendingA = new Promise<string | null>((res) => {

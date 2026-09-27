@@ -71,7 +71,7 @@ export function createPreviewController(deps: ControllerDeps) {
         break;
       case "trackCompleted":
         // AC53: hold the bar full through the gap. Never skip/stop from here —
-        // the engine emits this before clearing its timers.
+        // the engine emits this before it schedules the gap.
         if (lastView) show({ ...lastView, progress: "full" });
         break;
       case "sessionEnded":

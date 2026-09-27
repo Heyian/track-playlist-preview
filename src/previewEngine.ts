@@ -95,10 +95,11 @@ export function createPreviewEngine(deps: EngineDeps) {
 
   function onNormalComplete(gen: number): void {
     if (gen !== generation || state !== "previewing") return;
-    // AC53: report normal completion (duration expiry or natural end) before the gap.
-    deps.emit({ type: "trackCompleted", index, total: queue.length, track: queue[index]! });
     clearTimers();
     deps.audio.stop();
+    // AC53: report normal completion (duration expiry or natural end) once the
+    // clip is stopped, before the gap is scheduled.
+    deps.emit({ type: "trackCompleted", index, total: queue.length, track: queue[index]! });
     // AC23: apply the inter-track gap only after normal completion.
     const gap = deps.config.getGapMs();
     if (gap > 0) {
