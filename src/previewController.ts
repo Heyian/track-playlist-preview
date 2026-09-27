@@ -1,9 +1,20 @@
 // src/previewController.ts
 // Orchestrates the pure engine with the live coordinator and UI. Owns the
-// session-teardown policy, including the AC27 replacement rule.
-import type { TrackRef, EngineEvent, CollectionType } from "./types/domain";
+// session-teardown policy, including the AC27 replacement rule, and drives
+// the preview panel (AC46–AC61) and playlist removals (R1–R6, R13).
+import type {
+  TrackRef,
+  EngineEvent,
+  CollectionType,
+  PanelPort,
+  PanelView,
+  PlaylistMetadataPort,
+} from "./types/domain";
 import type { PreviewEngine } from "./previewEngine";
 import type { PlayerCoordinator } from "./playerCoordinator";
+import type { PendingRemovals } from "./pendingRemovals";
+import { GENERIC_LABEL } from "./spotify/collectionLabel";
+import { toPanelView, type SessionContext } from "./ui/previewPanel.view";
 
 export interface ControllerDeps {
   engine: PreviewEngine;
@@ -12,29 +23,60 @@ export interface ControllerDeps {
   fetchTrackRef(uri: string): Promise<TrackRef>;
   collectionTypeForUri(uri: string): CollectionType | null;
   notify: { info(m: string): void; error(m: string): void };
-  playbar: { register(): void; deregister(): void };
   highlight: { set(uri: string): void; clear(): void };
   /** The URI whose collection is currently being previewed, for AC34/AC40. */
   onActiveCollection(uri: string | null): void;
+  panel: PanelPort;
+  collectionLabel(uri: string, type: CollectionType): Promise<string>;
+  playlistMetadata: PlaylistMetadataPort;
+  pendingRemovals: Pick<PendingRemovals, "schedule" | "marker" | "isExcluded">;
+}
+
+interface Session extends SessionContext {
+  /** null = single-track session. */
+  collectionUri: string | null;
+  type: CollectionType | null;
+  /** pendingRemovals.marker() at session start (R13b). */
+  marker: number;
 }
 
 export function createPreviewController(deps: ControllerDeps) {
-  let activeCollectionUri: string | null = null;
+  let session: Session | null = null;
+  let lastView: PanelView | null = null;
+  let startSeq = 0; // bumped per beginSession; a stale start returns (later start wins)
+
+  function show(view: PanelView): void {
+    lastView = view;
+    deps.panel.update(view);
+  }
 
   function onEvent(event: EngineEvent): void {
     switch (event.type) {
       case "trackStarted":
-        deps.notify.info(`${event.track.name} — ${event.track.artist} (${event.index + 1}/${event.total})`); // AC38
+        // AC49: update in place. AC56: no per-track notice while the panel is open.
+        if (session) {
+          show(toPanelView({ state: "playing", track: event.track, index: event.index, total: event.total, session, progress: "live" }));
+        }
         deps.highlight.set(event.track.uri); // AC39
         break;
       case "trackSkipped":
-        break; // counted; summarised at session end (AC41)
+        // AC61; counted by the engine and summarised at session end (AC41).
+        if (session) {
+          show(toPanelView({ state: "skipping", track: event.track, index: event.index, total: event.total, session, progress: "empty" }));
+        }
+        break;
+      case "trackCompleted":
+        // AC53: hold the bar full through the gap. Never skip/stop from here —
+        // the engine emits this before clearing its timers.
+        if (lastView) show({ ...lastView, progress: "full" });
+        break;
       case "sessionEnded":
-        if (event.reason === "replaced") return; // AC27: new session keeps pause + controls
-        deps.playbar.deregister(); // AC33
+        if (event.reason === "replaced") return; // AC27/AC55: new session keeps pause + panel
+        deps.panel.close(); // AC55
         deps.highlight.clear(); // AC39
         deps.coordinator.release(); // AC25/AC26
-        activeCollectionUri = null;
+        session = null;
+        lastView = null;
         deps.onActiveCollection(null);
         if (event.reason === "aborted") deps.notify.error("Preview unavailable — Spotify API error"); // AC13
         if (event.skipped > 0) deps.notify.info(`Skipped ${event.skipped} track${event.skipped === 1 ? "" : "s"} with no preview`); // AC41
@@ -42,17 +84,54 @@ export function createPreviewController(deps: ControllerDeps) {
     }
   }
 
-  // The engine is created by index.ts with this listener; see wiring note.
+  async function isRemovable(uri: string): Promise<boolean> {
+    try {
+      return (await deps.playlistMetadata(uri)).canRemove === true; // R1/R2: literal true only
+    } catch {
+      return false; // R3
+    }
+  }
+
+  async function resolveLabel(uri: string, type: CollectionType): Promise<string> {
+    try {
+      return await deps.collectionLabel(uri, type);
+    } catch {
+      return GENERIC_LABEL[type];
+    }
+  }
+
   async function beginSession(queue: TrackRef[], startIndex: number, collectionUri: string | null): Promise<void> {
     if (queue.length === 0) {
-      deps.notify.info("Nothing to preview"); // AC8: no pause, no audio, no controls
+      deps.notify.info("Nothing to preview"); // AC8/AC46: no pause, no audio, no panel
       return;
     }
+    const seq = ++startSeq;
+    const type = collectionUri === null ? null : deps.collectionTypeForUri(collectionUri);
+    const [label, removable] = await Promise.all([
+      collectionUri !== null && type !== null ? resolveLabel(collectionUri, type) : Promise.resolve(null),
+      collectionUri !== null && type === "playlist" ? isRemovable(collectionUri) : Promise.resolve(false),
+    ]);
+    if (seq !== startSeq) return; // a later start superseded this one
+
+    // Bound before engine.start: the engine consults isExcluded synchronously (R13).
+    session = { collectionUri, type, label, removable, marker: deps.pendingRemovals.marker() };
     deps.coordinator.acquire(); // AC24 (no-op if a session is being replaced — AC27)
-    deps.playbar.register(); // AC33 (idempotent)
-    activeCollectionUri = collectionUri;
     deps.onActiveCollection(collectionUri);
+    lastView = toPanelView({
+      state: "playing",
+      track: queue[startIndex]!,
+      index: startIndex,
+      total: queue.length,
+      session,
+      progress: "empty",
+    });
+    deps.panel.open(lastView); // AC46/AC55: opens, or re-focuses on replacement
     deps.engine.start(queue, startIndex);
+  }
+
+  function advance(): void {
+    if (lastView) show({ ...lastView, progress: "empty" }); // AC53: no full-bar hold on Next/Remove
+    deps.engine.skip();
   }
 
   return {
@@ -91,11 +170,11 @@ export function createPreviewController(deps: ControllerDeps) {
         await this.startTrack(uri);
         return;
       }
-      await beginSession(queue, index, contextUri);
+      await beginSession(queue, index, contextUri); // R4: contextUri is the source playlist
     },
     toggleCollection(uri: string): void {
       // AC34: clicking the action-bar button during this collection's session stops it.
-      if (activeCollectionUri === uri && deps.engine.isActive()) {
+      if (session?.collectionUri === uri && deps.engine.isActive()) {
         deps.engine.stop();
       } else {
         void this.startCollection(uri, 0);
@@ -104,8 +183,26 @@ export function createPreviewController(deps: ControllerDeps) {
     stop(): void {
       deps.engine.stop();
     },
+    /** AC52: advance immediately; no-op when idle. */
+    next(): void {
+      if (!deps.engine.isActive()) return;
+      advance();
+    },
+    /** R5/R6: schedule removal of the current entry, then advance as Next does. */
+    removeCurrent(): void {
+      if (!session?.removable || session.collectionUri === null || !deps.engine.isActive()) return;
+      const track = deps.engine.currentTrack();
+      if (track === null) return;
+      deps.pendingRemovals.schedule(session.collectionUri, session.label ?? GENERIC_LABEL.playlist, track);
+      advance();
+    },
+    /** R13: exclusion is scoped to the session's source playlist and its start marker. */
+    isExcluded(trackUri: string): boolean {
+      if (session?.type !== "playlist" || session.collectionUri === null) return false;
+      return deps.pendingRemovals.isExcluded(session.collectionUri, trackUri, session.marker);
+    },
     isActiveFor(uri: string): boolean {
-      return activeCollectionUri === uri && deps.engine.isActive();
+      return session?.collectionUri === uri && deps.engine.isActive();
     },
   };
 }
