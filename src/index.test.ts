@@ -42,6 +42,17 @@ describe("load", () => {
     expect(createContextMenus).not.toHaveBeenCalled();
   });
 
+  it("S4: readiness waits for ReactDOM when the other globals are present", async () => {
+    (globalThis as { Spicetify?: unknown }).Spicetify = { React: {}, ContextMenu: {}, Platform: {} };
+    try {
+      await expect(load(ctx())).rejects.toThrow("not ready");
+      const { missing } = vi.mocked(waitForClient).mock.calls[0]![0];
+      expect(missing()).toEqual(["Spicetify.ReactDOM"]);
+    } finally {
+      delete (globalThis as { Spicetify?: unknown }).Spicetify;
+    }
+  });
+
   it("a second load (module re-enabled) re-registers only the settings section", async () => {
     vi.mocked(waitForClient).mockResolvedValue(undefined);
     const first = ctx();

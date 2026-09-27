@@ -35,7 +35,7 @@ import type { CollectionType } from "./types/domain";
 /** The client-readiness globals still absent, as `"Spicetify.<Name>"`. */
 function missingGlobals(): string[] {
   const s = (globalThis as { Spicetify?: Partial<Record<string, unknown>> }).Spicetify;
-  return (["React", "ContextMenu", "Platform"] as const).filter((name) => !s?.[name]).map((name) => `Spicetify.${name}`);
+  return (["React", "ReactDOM", "ContextMenu", "Platform"] as const).filter((name) => !s?.[name]).map((name) => `Spicetify.${name}`);
 }
 
 // The loader imports this file once but calls load() again each time the

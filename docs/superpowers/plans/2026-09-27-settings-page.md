@@ -24,7 +24,7 @@ emits an ES module with stdlib imports left external.
 - Only `src/ui/settingsSection.tsx` imports a `/modules/stdlib/` path — type imports included (S16).
 - `metadata.json` `dependencies` is `{ "stdlib": "^1.13.0" }`, copied from `package.json`
   `spicetify.dependencies` (S1).
-- Client readiness = `Spicetify.React`, `Spicetify.ContextMenu`, `Spicetify.Platform` all present.
+- Client readiness = `Spicetify.React`, `Spicetify.ReactDOM`, `Spicetify.ContextMenu`, `Spicetify.Platform` all present.
   `READY_TIMEOUT_MS` = 10 000. `MIN_DURATION_MS` = 1000. Gap minimum 0. No upper bounds.
 - Storage key stays `track-playlist-preview:settings` via `Spicetify.LocalStorage`; values stay in ms.
 - Section title **Track & Playlist Preview**; row labels exactly *Preview duration (seconds)*,

@@ -34,7 +34,7 @@ Spec-local (no `CONTEXT.md` glossary exists). Extends the Terms of the prior spe
 | **Spicetify Settings page** | The page stdlib serves at route `/bespoke/settings` (`SPICETIFY_SETTINGS_ROUTE`). Users reach it from the profile menu → **Spicetify Settings**, an item added by the `manager` module. |
 | **Settings section** | This module's named group on the Spicetify Settings page, registered through stdlib's `settingsSection` register. |
 | **Registrar** | The object `createRegistrar(ctx)` returns. Everything registered through it is removed when the module unloads. |
-| **Client readiness** | `Spicetify.React`, `Spicetify.ContextMenu` and `Spicetify.Platform` all present — the globals `load()` touches before any user interaction. |
+| **Client readiness** | `Spicetify.React`, `Spicetify.ReactDOM`, `Spicetify.ContextMenu` and `Spicetify.Platform` all present — the globals `load()` touches before any user interaction (`ReactDOM` mounts the preview panel). |
 
 _Avoid:_ "settings modal" and "settings menu" for the new surface; there is no modal and no menu
 item.

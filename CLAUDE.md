@@ -49,8 +49,8 @@ was removed. It does four things worth knowing:
 2. Inlines imported CSS into the output JS as an injected `<style>` — a sibling `.css` file would
    never be loaded.
 3. Emits an ES module whose only export is `load(ctx)`; there is no readiness wrapper. `load()`
-   awaits a capped `waitForClient` (`READY_TIMEOUT_MS`) for `Spicetify.React`, `ContextMenu` and
-   `Platform`. Other namespaces (`GraphQL`, `Snackbar`) still need checking before use.
+   awaits a capped `waitForClient` (`READY_TIMEOUT_MS`) for `Spicetify.React`, `ReactDOM`,
+   `ContextMenu` and `Platform`. Other namespaces (`GraphQL`, `Snackbar`) still need checking before use.
    `/modules/stdlib/*` imports stay external.
 4. Writes `index.js` and a `metadata.json` generated from `package.json` into
    `<config>/modules/track-playlist-preview/`. v3 ignores the v2 `Extensions/` folder and rejects
