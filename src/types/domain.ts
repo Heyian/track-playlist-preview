@@ -11,6 +11,14 @@ export interface TrackRef {
 
 export type CollectionType = "playlist" | "likedSongs" | "album" | "artist";
 
+/** Metadata returned by PlaylistAPI.getMetadata; only `name` and `canRemove` are used here. */
+export interface PlaylistMetadata {
+  name?: unknown;
+  canRemove?: unknown;
+}
+
+export type PlaylistMetadataPort = (uri: string) => Promise<PlaylistMetadata>;
+
 export interface PreviewSettings {
   durationMs: number;
   gapMs: number;
