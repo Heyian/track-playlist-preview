@@ -171,19 +171,20 @@ right-edge rules stay as they are under `data-position="right"`.
 - `settingsSection.view.test.ts`: option list values, labels and order.
 - `previewPanel.view.test.ts`: the existing `panelPlacement` cases get `position: "right"`. Their
   expected `rightPx`/`bottomPx`/`topClearancePx` stay unchanged; only the added `position` field
-  may be added to the expectations. New cases cover `playbar` (both worked examples, horizontal clamp,
-  missing Playbar, stack above and below) and `centre`.
+  may be added to the expectations. New cases cover `playbar` (both worked examples, unclamped centring,
+  horizontal clamp, top and bottom clamp, missing Playbar, stack above and below) and `centre`.
 - Live via CDP (`scripts/cdp-eval.mjs`): each position's boxes against the Playbar and notice
-  area, the immediate move from the Settings page, and focus staying on the `<select>`.
+  area, the stack's bounds and scrolling (P20), the immediate move from the Settings page for all
+  six transitions, and focus staying on the `<select>`.
 
 ## Acceptance Criteria
 
 **Setting**
 
 - **P1** — Given no stored `panelPosition`, `getPanelPosition()` returns `"right"`. Given stored
-  JSON with `panelPosition` `"playbar"` or `"centre"`, it returns that value. Given `"left"`, `42`
-  or `null`, it returns `"right"`, and `durationMs`, `gapMs` and `enabled` load as they would
-  without the field.
+  JSON with `panelPosition` `"playbar"` or `"centre"`, it returns that value. Given any other stored
+  value (for example `"left"`, `"Right"`, `""`, `42` or `null`), it returns `"right"`, and
+  `durationMs`, `gapMs` and `enabled` load as they would without the field.
 - **P2** — `setPanelPosition` with `"right"`, `"playbar"` or `"centre"` stores the value under
   `track-playlist-preview:settings` and then calls each `onChange` listener exactly once. With any
   other string, it stores nothing and calls no listener.
@@ -199,7 +200,8 @@ right-edge rules stay as they are under `data-position="right"`.
 
 - **P5** — Given position **Right edge**, every existing `panelPlacement` test case (inputs as
   today, plus the new `position` input) returns the same `rightPx`, `bottomPx` and `topClearancePx`
-  as before. The live panel and stack satisfy AC70 as originally written.
+  as before, so placement rules 1–4 of the panel spec hold unchanged, including rule 4's
+  left-of-Playbar fallback. The live panel and stack satisfy P15.
 - **P6** — Given position **Over the Playbar**, window 1909×1143, Playbar box 1473,56,1893,472 and
   nav bottom 64, `panelPlacement` places the panel at `right 86`, `top 72`, with the stack
   **below**.
@@ -207,8 +209,11 @@ right-edge rules stay as they are under `data-position="right"`.
   nav bottom 64, the panel's left edge is at x 500, its top is at y 400 (clamped to
   `innerHeight − 16 − 384`), and the stack is **above**.
 - **P8** — Given position **Over the Playbar**, the stack is **above** exactly when
-  `panelTop − 8 − stack ceiling ≥ 64`, and **below** otherwise. A Playbar box whose centre is less
-  than 156 px from a window side yields a panel exactly 16 px from that side.
+  `panelTop − 8 − stack ceiling ≥ 64`, and **below** otherwise. When no clamp applies, the panel's
+  centre equals the Playbar box's centre. A Playbar box whose centre is less than 156 px from a
+  window side yields a panel exactly 16 px from that side. A Playbar box whose centre is less than
+  208 px from the window top yields a panel top of 16; less than 208 px from the window bottom
+  yields a panel bottom of `innerHeight − 16`.
 - **P9** — Given position **Over the Playbar** and no `.Root__now-playing-bar`, `panelPlacement`
   returns the same panel and stack placement as **Right edge** for the same inputs.
 - **P10** — Given position **Window centre**, in the live client, the panel's centre is within 1 px
@@ -220,25 +225,42 @@ right-edge rules stay as they are under `data-position="right"`.
 
 **Applying a change**
 
-- **P12** — Given the panel is open at **Right edge**, when **Panel position** is changed to
-  **Window centre** (or **Over the Playbar**) on the Settings page, the panel and stack move to the
-  new placement without closing. The panel shows the same track with no restart of its progress,
-  and keyboard focus stays on the `<select>`.
+- **P12** — Given the panel is open at any position, when **Panel position** is changed to any
+  other position on the Settings page (all six transitions), the panel and stack move to the new
+  placement without closing. The new placement uses the window size and the Playbar's and nav's
+  boxes as measured at the moment of the change, not as they were when the panel opened. The panel
+  shows the same track with no restart of its progress, and keyboard focus stays on the `<select>`.
 - **P13** — Given the panel is closed and a removal is pending, a **Panel position** change moves
-  the stack to where the new position would place it.
-- **P14** — Given no change to the window or the Playbar, changing any other setting (duration,
-  gap, a collection toggle) leaves the panel's and stack's boxes unchanged.
+  the stack to where the new position would place it, measured at the moment of the change.
+- **P14** — Given no change to the window size or to the Playbar's or `.Root__globalNav`'s box,
+  changing any other setting (duration, gap, a collection toggle) leaves the panel's and stack's
+  boxes unchanged.
 
 **AC70, amended per position** (at a window of at least 1280×800, `global-nav-centered` layout)
 
-- **P15** — **Right edge**: AC70 unchanged.
-- **P16** — **Over the Playbar**: the panel's box lies inside the Playbar's box widened by
-  `max(0, (280 − Playbar width) / 2)` on each side and `max(0, (384 − Playbar height) / 2)`
-  above and below. The panel's and stack's boxes do not intersect the notice container's area.
+- **P15** — **Right edge**: placement follows rules 1–4 of the panel spec (P5). AC70's other
+  clauses hold unchanged: the stack is directly above the panel and keeps its position whether the
+  panel is open or closed, and the panel's and stack's boxes don't intersect the Playbar or the
+  notice container's area. AC70's "on the right edge" wording is superseded by rules 1–4 (rule 4
+  places the panel left of the Playbar's column).
+- **P16** — **Over the Playbar**: when neither window clamp moved the panel, the panel's box lies
+  inside the Playbar's box widened by `max(0, (280 − Playbar width) / 2)` on each side and
+  `max(0, (384 − Playbar height) / 2)` above and below. The panel's and stack's boxes do not
+  intersect the notice container's area.
 - **P17** — **Window centre**: the panel's and stack's boxes intersect neither the Playbar nor the
   notice container's area.
 - **P18** — In every position, the panel and stack render above page content and below
   `Spicetify.PopupModal`'s overlay, and no `e-[0-9]` class literal appears in `src/` (grep).
+
+**Stack bounds**
+
+- **P19** — Given position **Window centre**, with at least one pending removal, the stack is
+  **above** the panel at every window size.
+- **P20** — Given position **Over the Playbar** or **Window centre**: a stack **above** the panel
+  never extends above the stack ceiling (`.Root__globalNav`'s bottom + 8, or 72 px when that
+  element is missing); a stack **below** the panel never extends below `innerHeight − 16`. When
+  the pending rows need more height than that, the stack's box stays within those bounds and its
+  rows scroll.
 
 ## Deferred Items
 
@@ -252,7 +274,7 @@ None to a glossary file: no `CONTEXT.md` exists, and the terms are spec-local (s
 No ADR. A preference with a safe default is easy to reverse: an unknown stored value falls back to
 Right edge. It fails the "hard to reverse" criterion. No conflict with ADR 0001.
 
-AC70 (panel spec) is amended by P15–P17. The panel spec is back-annotated (see Documentation
+AC70 (panel spec) is amended by P15–P17: its "on the right edge" wording yields to placement rules 1–4, and the other positions get their own clauses. The panel spec is back-annotated (see Documentation
 Updates).
 
 ## Config & Infrastructure Impact
@@ -278,8 +300,8 @@ already enabled (`spotify_launch_flags = --remote-debugging-port=8088`, verified
 | Doc | Change |
 | --- | --- |
 | `README.md` | Settings table: add a row: **Panel position**, default Right edge, "Where the preview panel and Undo list appear: Right edge, Over the Playbar (covers Spotify's now-playing area), or Window centre. Applies immediately." |
-| `CLAUDE.md` | Documentation list: add a pointer row to this spec (criteria P1–P18). |
-| `docs/specs/2026-07-25-preview-modal-design.md` | Annotate the Layering → Placement paragraph and AC70: "These are the **Right edge** rules. See the [panel-position spec](2026-09-27-panel-position-design.md), P15–P17, for the other positions." |
+| `CLAUDE.md` | Documentation list: add a pointer row to this spec (criteria P1–P20). |
+| `docs/specs/2026-07-25-preview-modal-design.md` | Annotate the Layering → Placement paragraph and AC70: "These are the **Right edge** rules. AC70's "on the right edge" means rules 1–4, including rule 4's left-of-Playbar fallback. See the [panel-position spec](2026-09-27-panel-position-design.md), P15–P17, for the other positions." |
 | `docs/specs/2026-09-27-settings-page-design.md` | Deferred Items, #9 entry: append "— addressed by the [panel-position spec](2026-09-27-panel-position-design.md)". |
 
 ## Implementation Plan Guidance
@@ -328,6 +350,6 @@ Task 4 has nothing to verify: no Deferred Items were filed.
 >
 > ### Before finishing the branch (advisory cross-model review)
 >
-> After the final build passes — and before wrapping up via `superpowers:finishing-a-development-branch` — if a cross-model review helper is available (e.g. the Codex plugin's adversarial review), run it with focus: *"Judge correctness against the spec's acceptance criteria (P1–P18) only. Do not flag anything outside the stated criteria — no design alternatives, hardening, or scope the spec did not claim."*
+> After the final build passes — and before wrapping up via `superpowers:finishing-a-development-branch` — if a cross-model review helper is available (e.g. the Codex plugin's adversarial review), run it with focus: *"Judge correctness against the spec's acceptance criteria (P1–P20) only. Do not flag anything outside the stated criteria — no design alternatives, hardening, or scope the spec did not claim."*
 >
 > This **never gates a merge** — the gate stays `bun run check` plus `bun run build`; the review only flags what deserves a second look. If no helper is available, finish the branch without it.
