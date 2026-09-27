@@ -238,7 +238,7 @@ S5, S6, S9, S12, S14 and S15.
 
 - #8 — Remove everything the module mounted when it is unloaded
 - #9 — Setting to choose where the preview panel opens (follow-up that adds a `Select` row to this
-  section)
+  section) — addressed by the [panel-position spec](2026-09-27-panel-position-design.md)
 
 ## Glossary Updates & ADRs
 
