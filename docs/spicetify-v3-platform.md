@@ -39,6 +39,13 @@ Source: `spicetify/cli` `src/jsHelper/modularLoader/registry.ts` (`checkDependen
 - `Spicetify.URI` is completed by a separate retry loop the loader does not await.
   `Spicetify.LocalStorage` and `Spicetify.SVGIcons` are set synchronously, before any of this.
 - The loader awaits `load()`; an unbounded wait inside it blocks every later module. Cap waits.
+- An ES-module `index.js` whose only export is `load` loads cleanly, and its top-level code runs
+  once at import. When a module is evaluated, `Spicetify.React` is already set: a bundle that reads
+  it at top level (Bun's `react` → `Spicetify.React` alias does) loads and renders.
+  Verified 2026-09-27 over CDP: `Modules.report.loaded` lists `stdlib` then
+  `track-playlist-preview`, `failed` is empty, and one injected `<style>` is present.
+- Bun's bundler, with `format: "esm"` and `external: ["/modules/stdlib/*"]`, leaves both stdlib
+  import specifiers verbatim in the output (no plugin needed).
 
 Source: `spicetify/cli` `docs/v3-modules.md`; `src/jsHelper/modularLoader/index.ts`
 (`waitForClient`); `src/jsHelper/spicetifyWrapper/webpack/uri.js` (`waitForURI`);
@@ -53,6 +60,10 @@ Source: `spicetify/cli` `docs/v3-modules.md`; `src/jsHelper/modularLoader/index.
 - stdlib's `React` export is a proxy over the client's React: `createElement` and `useState` are
   identical to `Spicetify.React`'s. Using both does not load a second React.
 - `createStorage(ctx)` prefixes keys as `module:<identifier>:<key>`.
+- `Spicetify.Modules.disable(id)` disposes that module's registrar: its settings section is gone
+  from the Settings page right away (verified over CDP, 2026-09-27).
+- TypeScript never matches `declare module "/modules/stdlib/mod.js"`, because it treats a name that
+  starts with `/` as a relative path. Declare `"*/modules/stdlib/mod.js"` instead.
 
 Source: `~/.config/spicetify/store/stdlib/1.13.0/src/registers/index.js`, `src/storage.js`; CDP
 probe of `(await import("/modules/stdlib/mod.js")).React`.
@@ -61,7 +72,8 @@ probe of `(await import("/modules/stdlib/mod.js")).React`.
 
 - stdlib serves the **Spicetify Settings** page at `/bespoke/settings` (`SPICETIFY_SETTINGS_ROUTE`):
   registered `settingsSection` items, then the CORS proxy section, then `settingsAction` items.
-  The `manager` module adds the profile-menu item **Spicetify Settings** that opens it.
+  The `manager` module adds the profile-menu item **Spicetify Settings** that opens it. The item
+  is hidden while that page is already open.
 - First-party guidance: module-wide settings belong on this page (`settingsSection`, or
   `settingsRow` for a single setting), built from stdlib's `SettingsSection` / `Settings*Row`
   components. The profile menu is for account actions, not module settings.
@@ -75,5 +87,8 @@ Source: stdlib `src/registers/settingsSection.js`; manager `index.js`; `spicetif
 - `spicetify dev` enables developer mode ("app-developer mode in offline.bnk"); Spotify then serves
   the DevTools Protocol on `127.0.0.1:8088`. v2's `always_enable_devtools` config key does not
   apply.
+- On 2026-09-27, `spicetify apply` followed by `spicetify dev` left nothing listening on 8088.
+  Setting `spotify_launch_flags = --remote-debugging-port=8088` in
+  `~/.config/spicetify/config-xpui.ini` and re-running `spicetify apply` brought CDP up.
 
 Source: `/opt/spotify/libcef.so`; `spicetify dev --help`; the CLI binary's strings.
