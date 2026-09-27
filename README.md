@@ -15,7 +15,10 @@ no changelog entry. This extension restores it.
 - **Preview a whole collection** — a preview button in the action bar (next to Play / Shuffle /
   Download) on playlist, album, artist and Liked Songs pages, plus a right-click item on
   collections.
-- **Stay in control** — Skip and Stop appear in the playbar while a preview session is running.
+- **Stay in control** — a non-blocking preview panel shows the current track's artwork and
+  progress, with Stop / Next / Remove controls. While the panel has focus, `→` skips to the next
+  track, `Delete` removes the current track, and `Esc` stops the session. Removing a track shows an
+  Undo option for 5 seconds; Remove is only offered on playlists you can edit.
 
 Previews use Spotify's own short preview clips, played through a separate audio element. That means:
 
