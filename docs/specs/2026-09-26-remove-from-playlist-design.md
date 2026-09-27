@@ -237,10 +237,9 @@ Revised after the cross-model critique (2026-09-26). Timing criteria are asserte
 
 ## Deferred Items
 
-Recorded as **UNFILED**. The user opens tracker issues themselves (see the panel spec's Deferred
-Items). Not yet filed against `Heyian/track-playlist-preview`:
+Filed against `Heyian/track-playlist-preview` on 2026-09-27:
 
-- **UNFILED**: Remove (un-like) from **Liked Songs** during a Liked Songs session.
+- **#7**: Remove (un-like) from **Liked Songs** during a Liked Songs session.
   - *Context:* R2 excludes Liked Songs; un-liking is `LibraryAPI.remove`, a different action with a
     different scope (affects the whole library, not one playlist).
   - *Required:* a removable-session rule for `spotify:collection:tracks`, a `LibraryAPI.remove`

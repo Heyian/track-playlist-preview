@@ -483,10 +483,9 @@ All other shipped criteria are unchanged.
 
 ## Deferred Items
 
-Recorded as **UNFILED**: the user files tracker issues themselves. Not yet filed against
-`Heyian/track-playlist-preview`:
+Filed against `Heyian/track-playlist-preview` on 2026-09-27:
 
-- **UNFILED**: Add to playlist from the preview panel.
+- **#6**: Add to playlist from the preview panel.
   - *Context:* dropped from this iteration (see Investigation Findings: the native `TrackMenu` needs
     82 harvested React providers). Spotify's own row menu stays reachable during a session.
   - *Required:* either the native menu via provider harvesting behind a failure fallback, or a
@@ -494,7 +493,7 @@ Recorded as **UNFILED**: the user files tracker issues themselves. Not yet filed
     with search).
   - *Integration points:* `ui/previewPanel`, `spotify/ports`, a new picker module.
   - *Priority:* medium. Revisit after the panel ships.
-- **UNFILED**: Un-like from Liked Songs (recorded in the remove spec).
+- **#7**: Un-like from Liked Songs (recorded in the remove spec).
 
 Dropped from the original version's list (now moot): settings toggle to disable the modal (the
 Playbar-only flow it restored no longer exists); non-blocking surface (done); restore mid-session
