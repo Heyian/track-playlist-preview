@@ -40,7 +40,7 @@ was removed. It does four things worth knowing:
 2. Inlines imported CSS into the output JS as an injected `<style>` — a sibling `.css` file would
    never be loaded.
 3. Wraps output in a loop awaiting `Spicetify.React`, `ReactDOM` and `Platform`. Other namespaces
-   (`Playbar`, `ContextMenu`, `GraphQL`, `Snackbar`) still need checking before use.
+   (`ContextMenu`, `GraphQL`, `Snackbar`) still need checking before use.
 4. Writes `index.js` and a `metadata.json` generated from `package.json` into
    `<config>/modules/track-playlist-preview/`. v3 ignores the v2 `Extensions/` folder and rejects
    `spicetify -c`; the modules folder is parsed from `spicetify path`, falling back to
@@ -54,7 +54,8 @@ Only adapter modules may touch `Spicetify` globals. `previewEngine` is pure — 
 arrive as injected ports, which is what makes it unit-testable without a running client.
 
 `previewSource` (clip URLs) · `collections/` (URI → ordered tracks) · `previewEngine` (session state
-machine) · `playerCoordinator` (pause/resume only) · `settings` · `ui/`
+machine) · `playerCoordinator` (pause/resume only) · `pendingRemovals` (removal undo stack) ·
+`settings` · `ui/` (including `ui/previewPanel`)
 
 ## Non-obvious constraints
 
@@ -69,10 +70,12 @@ These are load-bearing; violating any is a defect. Full rationale in the spec's 
 - **`spotify:playlist:…` parses as `playlist-v2`, not `PLAYLIST`.** Gating a context-menu predicate
   on `URI.Type.PLAYLIST` silently never matches. Use `URI.isPlaylistV1OrV2()`.
 - **Only `playerCoordinator` may call `Spicetify.Player`,** and only `pause` / `resume`.
-- **Pass `Spicetify.Playbar.Button` icons as full `<svg>` markup, never an icon name.** Under v3,
-  stdlib's compat shim injects the string verbatim as SVG innerHTML, so `"skip-forward"` renders
-  an empty button. Build markup from `Spicetify.SVGIcons[name]`. Its `.element` / `.tippy` are
-  `null` under v3 — don't use them.
+- **Icons are always full `<svg>` markup, never a bare icon name.** Build markup from
+  `Spicetify.SVGIcons[name]` and pass that. Under v3, stdlib's compat shim injects an icon string
+  verbatim as SVG innerHTML, so a bare name like `"skip-forward"` renders an empty element. The
+  preview panel's controls still rely on this.
+- **Never use `Spicetify.PopupModal` for an in-session surface.** Notices render beneath it; use
+  the panel instead (see the panel spec).
 
 ## Debugging against the live client
 
