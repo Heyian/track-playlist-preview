@@ -1,7 +1,7 @@
 # Handoff — v3-beta branch + missing playbar Skip/Stop buttons under Spicetify v3
 
 Written 2026-09-26 from a session in `~/DEV/pkgs/spicetify-cli` (the AUR package
-`spicetify-cli-beta-bin`). Execute from `~/DEV/track-playlist-preview`.
+`spicetify-cli-beta-bin`). Execute from `~/DEV/spicetify/track-playlist-preview`.
 
 ## Goal
 
@@ -25,7 +25,7 @@ Branch from the committed impl HEAD, in its own worktree, so neither the main ch
 files nor the modal WIP get involved:
 
 ```sh
-cd ~/DEV/track-playlist-preview
+cd ~/DEV/spicetify/track-playlist-preview
 git worktree add .claude/worktrees/v3-beta -b v3-beta worktree-track-playlist-preview-impl
 ```
 

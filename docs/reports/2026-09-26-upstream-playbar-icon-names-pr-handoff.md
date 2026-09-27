@@ -21,7 +21,7 @@ show the fix working.
   `fnm` already has v24.21.0.
 - stdlib is at `1.13.0` (`modules/stdlib/metadata.json`) and is published.
 - Live client: Spicetify CLI 3.0.0-beta.19, stdlib 1.13.0, Spotify 1.2.96.518, Linux. CDP is on
-  `127.0.0.1:8088`. The harness is `node ~/DEV/track-playlist-preview/scripts/cdp-eval.mjs '<expr>'`
+  `127.0.0.1:8088`. The harness is `node ~/DEV/spicetify/track-playlist-preview/scripts/cdp-eval.mjs '<expr>'`
   and already skips DevTools windows.
 
 ## The bug (verified live 2026-09-26)
@@ -142,4 +142,4 @@ The Playbar shim is the only gap.
 
 - Push to the fork's `main`, or push anything to `spicetify/modules` directly.
 - Touch `vault.json` or `vault/`. Release writes those after the merge.
-- Change `~/DEV/track-playlist-preview`. Its workaround (full `<svg>` markup) stays either way.
+- Change `~/DEV/spicetify/track-playlist-preview`. Its workaround (full `<svg>` markup) stays either way.

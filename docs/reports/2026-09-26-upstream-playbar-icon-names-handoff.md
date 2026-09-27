@@ -1,6 +1,6 @@
 # Handoff: report the v3 Playbar icon-name bug upstream
 
-Written 2026-09-26. Work from `~/DEV/track-playlist-preview` on the **`v3-beta` branch, in the main
+Written 2026-09-26. Work from `~/DEV/spicetify/track-playlist-preview` on the **`v3-beta` branch, in the main
 checkout. Don't use a worktree.** Start with `git branch --show-current`. If it isn't `v3-beta`,
 run `git checkout v3-beta`.
 
