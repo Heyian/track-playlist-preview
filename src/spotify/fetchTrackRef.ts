@@ -2,6 +2,7 @@
 // Fetches display metadata for a single track URI. Bare-track preview entry
 // points (context menu) only receive a URI; the panel (AC69) needs a name,
 // artists and artwork. Falls back to a readable label if the lookup fails.
+import { pickArtwork } from "../collections/eligibility";
 import type { TrackRef } from "../types/domain";
 
 /** Parses the response from getTrack GraphQL operation into a TrackRef. */
@@ -19,19 +20,10 @@ export function parseGetTrack(uri: string, res: unknown): TrackRef | null {
   const allArtists = [...firstArtistNames, ...otherArtistNames];
   const artist = allArtists.join(", ");
 
-  // Pick artwork from coverArt.sources: prefer 300px (standard), fall back to first
-  const sources = trackUnion.albumOfTrack?.coverArt?.sources;
-  let artworkUrl: string | undefined;
-  if (sources && Array.isArray(sources)) {
-    const standard = sources.find((img: any) => img.width === 300);
-    artworkUrl = standard?.url ?? sources[0]?.url;
-  }
+  // Pick artwork from coverArt.sources (ordered 300/64/640; first is standard)
+  const artworkUrl = pickArtwork(trackUnion.albumOfTrack?.coverArt?.sources);
 
-  const result: TrackRef = { uri, name, artist };
-  if (artworkUrl) {
-    result.artworkUrl = artworkUrl;
-  }
-  return result;
+  return { uri, name, artist, ...(artworkUrl && { artworkUrl }) };
 }
 
 export async function fetchTrackRef(uri: string): Promise<TrackRef> {
