@@ -11,6 +11,12 @@ export interface TrackRef {
 
 export type CollectionType = "playlist" | "likedSongs" | "album" | "artist";
 
+/** Sort and filter passed to PlaylistAPI.getContents to reproduce a page's view order. */
+export interface ViewOptions {
+  sort?: { field: string; order?: "ASC" | "DESC" };
+  filter?: string;
+}
+
 /** Metadata returned by PlaylistAPI.getMetadata; only `name` and `canRemove` are used here. */
 export interface PlaylistMetadata {
   name?: unknown;

@@ -144,7 +144,8 @@ unresolved) so a 397-track collection is never resolved upfront.
 ### Behaviour
 
 - **Duration:** configurable, default 15 000 ms, clamped to the clip's own length.
-- **Order:** canonical stored order. The page's sort dropdown and search filter are ignored.
+- **Order:** the collection's view order (see `2026-09-28-view-order-design.md`). *(Amended by `2026-09-28-view-order-design.md`; was: canonical stored
+  order, with the page's sort dropdown and search filter ignored.)*
 - **Feedback:** a Snackbar per track (`Title — Artist (3/30)`) plus a highlight on the current
   track's row whenever that row is rendered in the track list.
 - **Missing clips:** skipped immediately and counted; one summary Snackbar at session end.
@@ -206,19 +207,21 @@ when the user stops it, when it is replaced by a new session, or when it aborts 
 **Enumeration**
 
 - **AC1** — Given a playlist URI, `collections.enumerate` returns track URIs preserving the
-  playlist's stored relative order; the returned count equals the number of eligible track entries
-  remaining after the AC6 exclusions.
+  playlist's view order (stored order when there is no saved sort and no page filter); the returned
+  count equals the number of eligible track entries remaining after the AC6 exclusions. *(Amended by
+  `2026-09-28-view-order-design.md`.)*
 - **AC2** — Given a collection larger than 100 tracks, enumeration paginates and returns every
   eligible track (verified against a 397-track playlist).
-- **AC3** — Given `spotify:collection:tracks`, enumeration calls `LibraryAPI.getTracks` and returns
-  every eligible track URI in the API's response order.
+- **AC3** — Given `spotify:collection:tracks`, enumeration enumerates Liked Songs via its internal
+  playlist URI (V10), falling back to `LibraryAPI.getTracks` (V11), and returns every eligible track
+  URI in the API's response order. *(Amended by `2026-09-28-view-order-design.md`.)*
 - **AC4** — Given an album URI, enumeration returns the album's tracks in disc/track order.
 - **AC5** — Given an artist URI, enumeration returns every track supplied by the artist top-tracks
   response, each exactly once and in response order. No fixed count is assumed.
 - **AC6** — Non-track items (podcast episodes, unavailable entries) are excluded from the returned
   preview queue.
-- **AC7** — For every collection type, the preview queue's order and membership are unaffected by
-  the page's active sort order or search filter.
+- ~~**AC7** — For every collection type, the preview queue's order and membership are unaffected by
+  the page's active sort order or search filter.~~ *(Struck by `2026-09-28-view-order-design.md`; superseded by V1–V13.)*
 - **AC8** — Given enumeration produces no eligible tracks, a "Nothing to preview" Snackbar is shown
   and no session starts: Spotify is not paused, no audio plays, and no panel opens. *(Amended by
   `2026-07-25-preview-modal-design.md` AC46: the "Playbar controls are registered" clause is struck
@@ -330,7 +333,7 @@ when the user stops it, when it is replaced by a new session, or when it aborts 
 
 Filed against `Heyian/track-playlist-preview`:
 
-- #1 — Preview should follow the visible sorted/filtered order
+- #1 — Preview should follow the visible sorted/filtered order — *resolved by `2026-09-28-view-order-design.md`.*
 - #2 — Optional full-playback fallback for tracks with no preview clip
 - #3 — Package for the Spicetify Marketplace
 

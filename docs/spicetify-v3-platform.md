@@ -133,3 +133,24 @@ l.398-417, l.470-489); installed `/opt/spotify/Apps/xpui/hooks/spicetifyWrapper.
   `~/.config/spicetify/config-xpui.ini` and re-running `spicetify apply` brought CDP up.
 
 Source: `/opt/spotify/libcef.so`; `spicetify dev --help`; the CLI binary's strings.
+
+## Spotify Platform APIs
+
+Checked 2026-09-28 against Spotify 1.2.96.518. Detail and the full list of findings:
+[view-order spec](specs/2026-09-28-view-order-design.md) § "Investigation Findings".
+
+- `Spicetify.Platform.PlaylistAPI.getContents(uri, opts)` sorts and filters: `sort: { field, order }`
+  (`TITLE`, `ADDED_BY`, `ADDED_AT`, `ARTIST`, `ALBUM`, `DURATION`, `SHOW_NAME`, `PUBLISH_DATE`;
+  `"ASC"`/`"DESC"`, default ASC) and `filter: string` (trimmed, case-insensitive, title/artist/album).
+  An unknown `field` is ignored silently; `totalLength` reflects the filtered count.
+- The saved sort is `Spicetify.Platform.LocalStorageAPI.getItem("sortedState")`: one map
+  `{ [uri]: { field, order } }` for all collections. "Custom order" deletes the entry.
+- The page filter is in no API or URL; read it from
+  `.main-view-container input.x-filterBox-filterInput`. The sidebar's library search shares the
+  class, hence the scope.
+- `LibraryAPI.getTracks` cannot sort or filter Liked Songs (different field names, `filters` returns
+  nothing). Liked Songs is a playlist at `Spicetify.Platform.LibraryAPI._likedSongsUri`
+  (`spotify:playlist:…`, per account); `getContents` on it sorts and filters, and its saved sort is
+  keyed by that URI.
+
+Source: `/opt/spotify/Apps/xpui/xpui-modules.js`; CDP probes.
