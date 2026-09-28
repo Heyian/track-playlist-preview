@@ -16,5 +16,5 @@
     "verbatimModuleSyntax": true,
     "noEmit": true
   },
-  "include": ["src/**/*", "build.ts"]
+  "include": ["src/**/*", "scripts/**/*.ts", "build.ts"]
 }
