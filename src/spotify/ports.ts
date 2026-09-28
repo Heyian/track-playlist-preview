@@ -109,11 +109,27 @@ export const spicetifyUriMatcher: UriMatcher = {
   isArtist: (uri) => Spicetify.URI.isArtist(uri),
 };
 
+/** Liked Songs' internal list-platform playlist URI (V10), or null when absent or unexpected (V11). */
+export function likedSongsPlaylistUri(): string | null {
+  const uri: unknown = Spicetify.Platform.LibraryAPI?._likedSongsUri;
+  return typeof uri === "string" && uri.startsWith("spotify:playlist:") ? uri : null;
+}
+
+/** The saved-sort map `{ [uri]: { field, order } }`. A throw propagates; viewOrder handles it (V4). */
+export function readSortedState(): unknown {
+  return Spicetify.Platform.LocalStorageAPI.getItem("sortedState");
+}
+
+/** The open page's "Search in playlist" text. Scoped to the main view so the sidebar's library search never counts (V8a). */
+export function readFilterText(): string | null {
+  return document.querySelector<HTMLInputElement>(".main-view-container input.x-filterBox-filterInput")?.value ?? null;
+}
+
 export function createCollectionDeps(): CollectionDeps {
   return {
     playlistApi: Spicetify.Platform.PlaylistAPI,
     libraryApi: Spicetify.Platform.LibraryAPI,
     artistOverview: artistOverviewRequest,
-    likedSongsPlaylistUri: () => null,
+    likedSongsPlaylistUri,
   };
 }
