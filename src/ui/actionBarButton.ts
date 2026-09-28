@@ -59,16 +59,19 @@ export function createActionBarButton(deps: ActionBarDeps) {
   }
 
   let started = false;
-  let scheduled = false;
+  let frame: number | null = null;
+  let unlisten: (() => void) | null = null;
+  let observer: MutationObserver | null = null;
 
   // Coalesce a burst of DOM mutations into a single inject() on the next frame,
   // instead of running inject() synchronously on every mutation. This yields to
   // the renderer between passes and prevents a mutation storm on busy pages.
   function schedule(): void {
-    if (scheduled) return;
-    scheduled = true;
-    requestAnimationFrame(() => {
-      scheduled = false;
+    // A History or observer callback already queued when stop() ran must not
+    // inject (U11).
+    if (!started || frame !== null) return;
+    frame = requestAnimationFrame(() => {
+      frame = null;
       inject();
     });
   }
@@ -79,9 +82,20 @@ export function createActionBarButton(deps: ActionBarDeps) {
       started = true;
       inject();
       // Re-inject on SPA navigation and on late-rendering action bars.
-      Spicetify.Platform.History.listen(schedule);
-      const observer = new MutationObserver(schedule);
+      unlisten = Spicetify.Platform.History.listen(schedule);
+      observer = new MutationObserver(schedule);
       observer.observe(document.body, { childList: true, subtree: true });
+    },
+    /** Unload (U10–U12): undo start() and remove the button. Safe before start() and twice. */
+    stop(): void {
+      started = false;
+      unlisten?.();
+      unlisten = null;
+      observer?.disconnect();
+      observer = null;
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = null;
+      document.getElementById(BUTTON_ID)?.remove();
     },
     refresh(): void {
       inject();
