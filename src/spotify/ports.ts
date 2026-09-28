@@ -114,5 +114,6 @@ export function createCollectionDeps(): CollectionDeps {
     playlistApi: Spicetify.Platform.PlaylistAPI,
     libraryApi: Spicetify.Platform.LibraryAPI,
     artistOverview: artistOverviewRequest,
+    likedSongsPlaylistUri: () => null,
   };
 }

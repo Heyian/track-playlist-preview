@@ -1,4 +1,4 @@
-import type { TrackRef, CollectionType } from "../types/domain";
+import type { TrackRef, CollectionType, ViewOptions } from "../types/domain";
 import { enumeratePlaylistContents, type PlaylistContentsApi } from "./playlist";
 import { enumerateLikedSongs, type LibraryApi } from "./likedSongs";
 import { enumerateArtist, type ArtistOverviewApi } from "./artist";
@@ -16,6 +16,8 @@ export interface CollectionDeps {
   playlistApi: PlaylistContentsApi;
   libraryApi: LibraryApi;
   artistOverview: ArtistOverviewApi;
+  /** Liked Songs' internal `spotify:playlist:` URI, or null when unavailable (V10, V11). */
+  likedSongsPlaylistUri(): string | null;
 }
 
 export function collectionTypeForUri(uri: string, matcher: UriMatcher): CollectionType | null {
@@ -30,13 +32,19 @@ export async function enumerate(
   uri: string,
   deps: CollectionDeps,
   classify: (uri: string) => CollectionType | null,
+  view?: ViewOptions,
 ): Promise<TrackRef[]> {
   switch (classify(uri)) {
     case "playlist":
+      return enumeratePlaylistContents(uri, deps.playlistApi, view);
     case "album":
       return enumeratePlaylistContents(uri, deps.playlistApi);
-    case "likedSongs":
+    case "likedSongs": {
+      // LibraryAPI.getTracks cannot sort or filter, so the view needs the internal playlist URI.
+      const internalUri = deps.likedSongsPlaylistUri();
+      if (internalUri !== null) return enumeratePlaylistContents(internalUri, deps.playlistApi, view);
       return enumerateLikedSongs(deps.libraryApi);
+    }
     case "artist":
       return enumerateArtist(uri, deps.artistOverview);
     default:
