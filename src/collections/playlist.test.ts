@@ -62,4 +62,45 @@ describe("enumeratePlaylistContents", () => {
   it("AC59: no album images → artworkUrl undefined", async () => {
     expect((await enumeratePlaylistContents("spotify:playlist:p", pagedApi([track("a")], 100)))[0]!.artworkUrl).toBeUndefined();
   });
+
+  function recordingApi(all: RawTrackItem[]) {
+    const calls: Record<string, unknown>[] = [];
+    const api: PlaylistContentsApi = {
+      async getContents(_uri, options) {
+        calls.push({ ...options });
+        return { items: all.slice(options.offset, options.offset + options.limit), totalLength: all.length };
+      },
+    };
+    return { api, calls };
+  }
+
+  it("V1/V19: sends the same sort on every page and keeps every entry, duplicates included", async () => {
+    const all = Array.from({ length: 250 }, (_, i) => track(`t${i % 200}`)); // t0..t49 appear twice
+    const { api, calls } = recordingApi(all);
+    const refs = await enumeratePlaylistContents("spotify:playlist:p", api, { sort: { field: "TITLE", order: "ASC" } });
+    expect(refs).toHaveLength(250);
+    expect(calls).toHaveLength(3);
+    for (const c of calls) expect(c.sort).toEqual({ field: "TITLE", order: "ASC" });
+  });
+
+  it("V6: sends the filter on every page", async () => {
+    const { api, calls } = recordingApi(Array.from({ length: 150 }, (_, i) => track(`t${i}`)));
+    await enumeratePlaylistContents("spotify:playlist:p", api, { filter: "live" });
+    expect(calls.map((c) => c.filter)).toEqual(["live", "live"]);
+  });
+
+  it("V2: omits sort and filter keys when no view is given or the view is empty", async () => {
+    for (const view of [undefined, {}]) {
+      const { api, calls } = recordingApi([track("a")]);
+      await enumeratePlaylistContents("spotify:playlist:p", api, view);
+      expect(Object.keys(calls[0]!).sort()).toEqual(["limit", "offset"]);
+    }
+  });
+
+  it("V9: sorted results drop ineligible leading entries and keep order", async () => {
+    const all = [track("gone", { isPlayable: false, name: "" }), track("b"), track("a")];
+    const { api } = recordingApi(all);
+    const refs = await enumeratePlaylistContents("spotify:playlist:p", api, { sort: { field: "TITLE" } });
+    expect(refs.map((r) => r.uri)).toEqual(["spotify:track:b", "spotify:track:a"]);
+  });
 });
