@@ -1,7 +1,6 @@
 // src/ui/rowHighlight.ts
 // Highlights the currently-previewing row wherever it is rendered. Rows
 // virtualize, so a MutationObserver re-applies the class as they mount.
-import "./rowHighlight.css";
 
 const CLASS = "tpp-previewing-row";
 const ROW = ".main-trackList-trackListRow";

@@ -1,4 +1,4 @@
-/* src/ui/previewPanel.css — inlined into the bundle by build.ts.
+/* src/ui/previewPanel.css — compiled from src/index.scss by spicetify-kit.
  * Colours only from Spotify's --background-elevated-base, --text-base and
  * --text-subdued; button classes are read from a live encore sibling at render.
  * z-index 50: above page content, below PopupModal's overlay (z 100) — spike p1. */

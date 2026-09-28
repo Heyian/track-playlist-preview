@@ -12,7 +12,6 @@ import type { PendingRemovalEntry } from "../pendingRemovals";
 import { panelKeyAction, panelPlacement, placementStyle, PANEL_KEYS, type PanelPlacement } from "./previewPanel.view";
 import { PendingRemovalsStack, tertiaryClass } from "./pendingRemovalsStack";
 import { mountPanelHost } from "./panelHost";
-import "./previewPanel.css";
 
 export interface PreviewPanelDeps {
   onStop(): void;

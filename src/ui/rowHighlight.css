@@ -1,4 +1,4 @@
-/* src/ui/rowHighlight.css — inlined into the bundle by build.ts */
+/* src/ui/rowHighlight.css — compiled from src/index.scss by spicetify-kit */
 .tpp-previewing-row {
   box-shadow: inset 2px 0 0 0 var(--spice-button, #1ed760);
   background-color: var(--spice-highlight, rgba(30, 215, 96, 0.08));
