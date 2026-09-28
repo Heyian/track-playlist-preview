@@ -164,6 +164,15 @@ describe("load and unload (U20–U24, U31)", () => {
     expect(registerSettingsSection).not.toHaveBeenCalled();
   });
 
+  it("U22: a throwing settings registration disposes the wiring", async () => {
+    const boom = new Error("boom");
+    vi.mocked(registerSettingsSection).mockImplementationOnce(() => {
+      throw boom;
+    });
+    await expect(load(ctx())).rejects.toBe(boom);
+    for (const m of [...teardowns(0), vi.mocked(rowHighlight.clear)]) expect(m).toHaveBeenCalledTimes(1);
+  });
+
   it("U24: running the deferred dispose twice tears down once", async () => {
     const c = ctx();
     await load(c);

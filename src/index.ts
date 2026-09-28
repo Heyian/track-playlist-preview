@@ -49,7 +49,18 @@ export async function load(ctx: ModuleRuntimeContext): Promise<void> {
   // Deferred before the registrar exists, so on unload (reverse order) the
   // settings section goes first, then this wiring.
   ctx.defer(dispose);
-  registerSettingsSection(ctx, settings);
+  try {
+    registerSettingsSection(ctx, settings);
+  } catch (error) {
+    // load() rejecting means the loader never runs our disposers (partial-load
+    // leak), so dispose here; a later deferred call is a no-op (U24).
+    try {
+      dispose();
+    } catch {
+      // The original error is the one load() reports.
+    }
+    throw error;
+  }
 }
 
 /**
