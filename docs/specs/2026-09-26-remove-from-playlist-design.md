@@ -209,6 +209,10 @@ Revised after the cross-model critique (2026-09-26). Timing criteria are asserte
   undoing one has no effect on the other. Pressing Next during a window does not cancel, hasten or
   retarget any pending removal.
 
+_On unload, pending removals are flushed (committed at once): see the
+[unload-teardown spec](2026-09-27-unload-teardown-design.md), U6–U9. Quitting Spotify still drops
+them (#10)._
+
 **Excluded tracks**
 
 - **R13**: Given a session on playlist P reaches an entry for track T that is an **excluded
