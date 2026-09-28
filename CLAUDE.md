@@ -37,6 +37,7 @@ There is no linter. `bun run check` is the whole gate.
   Settings page, the `load(ctx)` entry, criteria S1–S18.
 - [Panel-position spec](docs/specs/2026-09-27-panel-position-design.md) — the Panel position setting (Right edge / Over the Playbar / Window centre), criteria P1–P20.
 - [Unload-teardown spec](docs/specs/2026-09-27-unload-teardown-design.md) — disposing everything on unload, the per-load wiring, criteria U1–U31.
+- [View-order spec](docs/specs/2026-09-28-view-order-design.md) — sort and filter in the preview queue, criteria V1–V22 and V8a.
 - [Spicetify v3 platform notes](docs/spicetify-v3-platform.md) — read before relying on how the
   CLI, loader or stdlib behave: installs, dependencies, load order and readiness, Settings page,
   devtools. Record new verified findings there.
