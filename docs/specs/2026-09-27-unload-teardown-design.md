@@ -189,19 +189,28 @@ registration (as the loader does); in the live client, `Spicetify.Modules.disabl
 
 **Session and playback**
 
-- **U1** — Given an active session that started while Spotify was playing, when the module unloads,
-  then the preview clip stops (the audio element is paused and has no `src`), the player port's
-  `resume` is called exactly once, and the preview panel is no longer rendered.
-- **U2** — Given an active session that started while Spotify was paused, when the module unloads,
-  then the player port's `resume` is not called.
-- **U3** — Given `startCollection`, `startTrack` or `startFromHere` is awaiting its enumeration or
-  track lookup when the module unloads, when that await settles, then no session begins: the player
-  port's `pause` is not called, the engine is not started, and the panel is not opened.
+"Preview sequence" below means the run of sessions from the coordinator's `acquire()` to its
+`release()`: a session that replaces another continues the same sequence and does not re-sample
+`isPlaying()` (AC27).
+
+- **U1** — Given an active session in a preview sequence whose first `acquire()` found Spotify
+  playing (so the coordinator paused it), when the module unloads, then the preview clip stops (the
+  audio element is paused and has no `src`), the player port's `resume` is called exactly once, and
+  the preview panel is no longer rendered. This holds when the active session replaced an earlier
+  one in the same sequence.
+- **U2** — Given an active session in a preview sequence whose first `acquire()` found Spotify
+  already paused, when the module unloads, then the player port's `resume` is not called.
+- **U3** — Given `startCollection`, `startTrack` or `startFromHere` is awaiting any asynchronous
+  step of a start (enumeration, track lookup, collection-label lookup, or playlist-metadata lookup)
+  when the module unloads, when that await settles, then no session begins: the player port's
+  `pause` is not called, the engine is not started, and the panel is not opened.
 - **U4** — After unload, calling the old wiring's `startCollection`, `startTrack`, `startFromHere`,
   `toggleCollection`, `next` or `removeCurrent` does not call the player port, start the engine,
   open the panel, or schedule a removal.
 - **U5** — After unload, no element has the class `tpp-previewing-row`, and adding a track row
   matching the last previewed track to the DOM does not give it that class.
+- **U29** — Given an active session that has skipped N ≥ 1 tracks, when the module unloads, then the
+  info notice "Skipped N track(s) with no preview" (AC41) is shown exactly once.
 
 **Pending removals**
 
@@ -224,7 +233,9 @@ registration (as the loader does); in the live client, `Spicetify.Modules.disabl
 - **U12** — Given an `inject()` queued for the next animation frame when the module unloads, when
   that frame runs, then `#tpp-action-bar-button` is still absent.
 - **U13** — Given `stop()` then `start()` on the action-bar button, on an enabled collection page
-  exactly one `#tpp-action-bar-button` exists.
+  whose action-bar row and tertiary sibling are present, exactly one `#tpp-action-bar-button` exists
+  after the scheduled injection runs; if the row and sibling render later, exactly one exists after
+  the injection that follows.
 
 **Context menus**
 
@@ -242,10 +253,11 @@ registration (as the loader does); in the live client, `Spicetify.Modules.disabl
 
 **Stylesheet**
 
-- **U18** — `bun run build:local` writes `dist/track-playlist-preview/index.css` containing the rules
-  of every CSS file imported under `src/` (`.tpp-panel`, `.tpp-previewing-row`), `metadata.json`
-  declares `entries` `{ "js": "index.js", "css": "index.css" }`, and `index.js` creates no `<style>`
-  element.
+- **U18** — `bun run build:local` and `bun run build` each write `index.css` into their output
+  directory (`dist/track-playlist-preview/` and `<config>/modules/track-playlist-preview/`)
+  containing the rules of every CSS file imported under `src/` (`.tpp-panel`, `.tpp-previewing-row`),
+  `metadata.json` declares `entries` `{ "js": "index.js", "css": "index.css" }`, and `index.js`
+  creates no `<style>` element. (`watch` uses the same build function.)
 - **U19** — Live: after disable, no adopted stylesheet and no `<style>` element contains a rule
   mentioning `.tpp-panel`; after enable, exactly one adopted stylesheet does.
 
@@ -253,15 +265,22 @@ registration (as the loader does); in the live client, `Spicetify.Modules.disabl
 
 - **U20** — After the first wiring is unloaded, a second `load(ctx)` builds a new wiring: the
   context-menu, action-bar and panel factories each run once more, three context-menu items are
-  registered (not six), and on an enabled collection page exactly one `#tpp-action-bar-button`
-  exists.
+  registered (not six), and on an enabled collection page whose action-bar row and tertiary sibling
+  are present, exactly one `#tpp-action-bar-button` exists once injection has run.
+- **U31** — After the first wiring is unloaded and a second `load(ctx)` completes, calling the new
+  wiring's `startCollection` on a collection with a preview clip begins a session: the engine
+  starts, the panel opens, and the player port's `pause` is called if Spotify was playing.
 - **U21** — Settings values stored before an unload are the values the next `load()`'s wiring reads.
 - **U22** — Given a step of `wire()` throws, every piece built before it has been disposed (its
   teardown step ran), `load()` rejects with that error, and no function was passed to `ctx.defer`.
-- **U23** — Given one teardown step throws, every later step still runs, and `dispose()` then throws
-  that error.
+- **U23** — Given one or more teardown steps throw, every remaining step still runs, and after all
+  steps finish `dispose()` throws the first error encountered in teardown order.
 - **U24** — Calling `dispose()` a second time makes no player, remove, deregister, unmount or DOM
   call and does not throw.
+- **U30** — After unload, every unsubscribe returned by `settings.onChange` to the wiring (the
+  *Preview track* relabel and the panel placement) has been called, so the settings store holds no
+  listener from the old wiring; and the action-bar button's and the row highlight's
+  `MutationObserver`s have been disconnected.
 - **U25** — S15 and S18 still hold.
 
 **Verification script and code**
@@ -269,7 +288,7 @@ registration (as the loader does); in the live client, `Spicetify.Modules.disabl
 - **U26** — `node scripts/check-unload.mjs`, run against a live client with CDP on `CDP_PORT` and a
   Liked Songs track with a preview clip, prints one `PASS` line per check in its step 3 and step 4
   and exits 0; `--no-session` omits the session checks. If any check fails, the script prints
-  `FAIL` for that check and exits 1.
+  `FAIL` for that check and exits 1. If the run throws, the script exits 1.
 - **U27** — After any run of `check-unload.mjs` (pass, fail, or thrown error), the module is enabled
   (`Spicetify.Modules.report` lists it as loaded), `HTMLMediaElement.prototype.play`,
   `ContextMenuV2.registerItem` and `ContextMenuV2.unregisterItem` are the original functions, and
@@ -368,6 +387,6 @@ Required Task 6 does not apply: no Manual Operator Steps.
 >
 > ### Before finishing the branch (advisory cross-model review)
 >
-> After the final build passes — and before wrapping up via `superpowers:finishing-a-development-branch` — if a cross-model review helper is available (e.g. the Codex plugin's adversarial review), run it with focus: *"Judge correctness against the spec's acceptance criteria (U1–U28) only. Do not flag anything outside the stated criteria — no design alternatives, hardening, or scope the spec did not claim."*
+> After the final build passes — and before wrapping up via `superpowers:finishing-a-development-branch` — if a cross-model review helper is available (e.g. the Codex plugin's adversarial review), run it with focus: *"Judge correctness against the spec's acceptance criteria (U1–U31) only. Do not flag anything outside the stated criteria — no design alternatives, hardening, or scope the spec did not claim."*
 >
 > This **never gates a merge** — the gate stays `bun run check` plus `bun run build`; the review only flags what deserves a second look. If no helper is available, finish the branch without it.
