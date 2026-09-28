@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run build:local
+      - name: Check the built folder against the tag
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: bun run check:dist --tag "$TAG"
+      - name: Read the version
+        id: version
+        run: echo "version=$(node -p "require('./src/metadata.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: spicetify/actions/publish@v1
+        id: publish
+        with:
+          dist: dist/track-playlist-preview@${{ steps.version.outputs.version }}
+          release-tag: ${{ needs.release-please.outputs.tag_name }}
+          token: ${{ secrets.SPICETIFY_SUBMIT_TOKEN }}
+      - name: Write the store entry to the summary
+        env:
+          ENTRY: ${{ steps.publish.outputs.entry }}
+        run: |
+          {
+            echo '### Store entry'
+            echo '```json'
+            echo "$ENTRY"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
