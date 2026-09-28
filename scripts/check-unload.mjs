@@ -10,6 +10,8 @@
 // playback for a few seconds. Prints one PASS/FAIL line per check; exits 1 if
 // any check failed or the run threw.
 
+import { START_PREVIEW, restoreExpression } from "./checkUnloadPage.mjs";
+
 const PORT = process.env.CDP_PORT ?? "8088";
 const ID = "track-playlist-preview";
 const withSession = !process.argv.includes("--no-session");
@@ -103,7 +105,6 @@ const SHEETS = `(() => {
   return { adopted, styles };
 })()`;
 
-const LOADED = `Spicetify.Modules.report.loaded.includes(${JSON.stringify(ID)})`;
 
 const results = [];
 function check(name, ok, detail) {
@@ -128,7 +129,7 @@ try {
     if (!(await wait(`document.getElementById("tpp-action-bar-button")`, 5000))) {
       throw new Error("Preview all button did not appear on /collection/tracks.");
     }
-    await ev(`document.getElementById("tpp-action-bar-button").click()`);
+    await ev(START_PREVIEW);
     if (!(await wait(`window.__tppCheck.clip && !window.__tppCheck.clip.paused`, 10000))) {
       throw new Error("No preview clip started playing within 10 s.");
     }
@@ -176,18 +177,8 @@ try {
   // 5. Leave the client as it was found.
   if (page) {
     try {
-      await page.evaluate(`(async () => {
-        if (!(${LOADED})) await Spicetify.Modules.enable(${JSON.stringify(ID)});
-        const s = window.__tppCheck;
-        if (s) {
-          HTMLMediaElement.prototype.play = s.orig.play;
-          Spicetify.ContextMenuV2.registerItem = s.orig.reg;
-          Spicetify.ContextMenuV2.unregisterItem = s.orig.unreg;
-          Spicetify.Platform.History.push(s.path);
-          delete window.__tppCheck;
-        }
-        return true;
-      })()`);
+      const restored = await page.evaluate(restoreExpression(ID));
+      if (restored !== true) throw new Error(restored);
     } catch (err) {
       failed = true;
       console.error(`ERROR restoring the client: ${String(err.message ?? err)}`);
