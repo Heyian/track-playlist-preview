@@ -225,13 +225,16 @@ unminified, with the sourcemap shipped; README makes the store the primary insta
 ### Build
 
 - **M1** — `bun run build:local` produces `dist/track-playlist-preview@<version>/` containing
-  `index.js`, `index.css`, `metadata.json` and `spicetify-module.json`, where `<version>` is
-  `package.json`'s version.
+  `index.js`, the sourcemap kit emits for `index.js`, `index.css`, `metadata.json` and
+  `spicetify-module.json`, where `<version>` is `package.json`'s version.
 - **M2** — The built `metadata.json` deep-equals `src/metadata.json`.
 - **M3** — `src/metadata.json` has:
   - `name` = `track-playlist-preview`;
   - `version` equal to `package.json`'s;
-  - `preview`, an absolute `https://` URL;
+  - `description` = `Brings back Spotify's removed track preview and extends it to whole playlists,
+    albums, artists and Liked Songs.`;
+  - `hasMixins` = `false`;
+  - `preview` = `https://raw.githubusercontent.com/Heyian/track-playlist-preview/main/docs/preview.png`;
   - `repository` = `https://github.com/Heyian/track-playlist-preview`;
   - `license` = `MIT`;
   - `authors` = `[{ "name": "Heyian", "github": "Heyian" }]`;
@@ -239,12 +242,15 @@ unminified, with the sourcemap shipped; README makes the store the primary insta
   - `entries` = `{ "js": "index.js", "css": "index.css" }`;
   - neither a `tags` nor a `kind` key.
 
-  A unit test enforces every item.
+  And `package.json` has no `spicetify` key, and its `devDependencies["@spicetify/kit"]` is exactly
+  `0.3.1`. A unit test enforces every item.
 - **M4** — No file under `src/` imports a `.css` file. `src/index.scss` exists, and the built
-  `index.css` contains the row-highlight and preview-panel rules.
-- **M5** — `bun run build` leaves `<modules>/track-playlist-preview/` holding the same file set as
-  the M1 folder, and nothing else. No `track-playlist-preview@<version>` folder is created under
-  `<modules>`.
+  `index.css` contains the row-highlight and preview-panel rules, with every row-highlight rule
+  before the first preview-panel rule.
+- **M5** — For the same source and version, `bun run build` leaves
+  `<modules>/track-playlist-preview/` holding exactly the relative paths and byte contents of the M1
+  folder, and nothing else: files left from an earlier build are removed. No
+  `track-playlist-preview@<version>` folder is created under `<modules>`.
 - **M6** — The kit build's module-standard check reports zero error-tier findings. A build that
   hits an error-tier finding exits non-zero.
 - **M7** — Given the M5 build and `spicetify apply`:
@@ -260,7 +266,8 @@ unminified, with the sourcemap shipped; README makes the store the primary insta
 - **M9** — Given a push to `main` with at least one `feat:` or `fix:` commit since the last
   release, release-please opens or updates one release PR. That PR bumps `package.json`,
   `src/metadata.json`, `.release-please-manifest.json` and `CHANGELOG.md` to the same version.
-- **M10** — The first release PR after this branch merges proposes exactly `0.1.0`.
+- **M10** — The first release PR after this branch merges proposes exactly `0.1.0`, and its
+  `CHANGELOG.md` lists no commit from before this branch's base on `main`.
 - **M11** — Given a push to `main` with no releasable commits since the last release, no release is
   created and the `publish` job is skipped.
 - **M12** — When a release PR merges, a tag `v<version>` and a GitHub release are created, and the
@@ -279,7 +286,8 @@ unminified, with the sourcemap shipped; README makes the store the primary insta
   spicetify/modules' `node scripts/validate-submission.ts --base main` on a local branch that adds
   only that entry prints `validate-submission: ok`.
 - **M18** — `ci.yml` runs `bun run check` and `bun run build:local` on every PR and on every push
-  to `main`, and fails when either fails.
+  to `main`, and fails when either fails. Exception: release-please PRs opened with `GITHUB_TOKEN`
+  get no PR run, and none is required; the `publish` job re-runs the check after merge.
 - **M19** — Every workflow declares `permissions` explicitly:
   - `ci.yml`: `contents: read`;
   - `release-please`: `contents: write` and `pull-requests: write`;
@@ -291,10 +299,28 @@ unminified, with the sourcemap shipped; README makes the store the primary insta
 ### Docs
 
 - **M20** — `docs/preview.png` exists, is 16:9, shows the preview panel over a public editorial
-  playlist, and was approved by the user before commit.
+  playlist, and was approved by the user before commit. When the first release is created, the
+  `preview` URL in `src/metadata.json` returns HTTP 200 with `Content-Type: image/png`.
 - **M21** — README's Install section gives the store install first and install-from-source
   second. Its Development section describes the kit-based build. CLAUDE.md's Build section matches
   the new `build.ts`, and CLAUDE.md states the commit-prefix rule.
+
+### Added after spec critique
+
+- **M22** — While `bun run watch` runs, saving a change to a file under `src/` rebuilds and leaves
+  `<modules>/track-playlist-preview/` in the state M5 describes for the changed source.
+- **M23** — The built `index.js` imports React from `/modules/stdlib/src/expose/react-shim.js`.
+- **M24** — While the version is below `1.0.0`, a release PR whose releasable commits include a
+  breaking change (`feat!:` or a `BREAKING CHANGE:` footer) bumps the minor version, not the major.
+- **M25** — On a Spicetify v3 config that has never had this module, installing the exact `0.1.0`
+  release asset with `spicetify pkg install track-playlist-preview <asset URL>`, then
+  `spicetify pkg enable track-playlist-preview` and `spicetify apply`, passes every M7 check.
+
+Critique findings not taken as criteria: modules-folder discovery (unchanged from today); the
+bundled classmap (output bytes are identical with any classmap, finding 5); building from the tag
+and `--frozen-lockfile` (M13's version check ties the artifact to the tag); how the preview was
+captured (can't be checked after the fact); `.gitignore` and the individual doc deliverables
+(covered by the Config and Documentation tables and plan-guidance items 5, 7 and 8).
 
 ## Deferred Items
 
@@ -339,7 +365,8 @@ In order. The agent does none of these.
 1. **Allow Actions to open PRs.** GitHub → `Heyian/track-playlist-preview` → Settings → Actions →
    General → Workflow permissions → tick "Allow GitHub Actions to create and approve pull
    requests" → Save. Needed before the first push of `release.yml` to `main`.
-2. **Merge the release PR** titled `chore(main): release 0.1.0` once CI and review are done. This
+2. **Merge the release PR** titled `chore(main): release 0.1.0` once reviewed (it gets no CI run;
+   see M18). This
    creates `v0.1.0`, and the `publish` job attaches the zip and prints the store entry in the job
    summary.
 3. **Clean-install check.** On a machine, or a fresh Spicetify v3 config, that has never had this
@@ -405,7 +432,7 @@ In order. The agent does none of these.
 >
 > ### Before finishing the branch (advisory cross-model review)
 >
-> After the final build passes — and before wrapping up via `superpowers:finishing-a-development-branch` — if a cross-model review helper is available (e.g. the Codex plugin's adversarial review), run it with focus: *"Judge correctness against the spec's acceptance criteria (M1–M21) only. Do not flag anything outside the stated criteria — no design alternatives, hardening, or scope the spec did not claim."*
+> After the final build passes — and before wrapping up via `superpowers:finishing-a-development-branch` — if a cross-model review helper is available (e.g. the Codex plugin's adversarial review), run it with focus: *"Judge correctness against the spec's acceptance criteria (M1–M25) only. Do not flag anything outside the stated criteria — no design alternatives, hardening, or scope the spec did not claim."*
 >
 > This **never gates a merge** — the gate stays `bun run check` plus `bun run build:local`; the review only flags what deserves a second look. If no helper is available, finish the branch without it.
 
