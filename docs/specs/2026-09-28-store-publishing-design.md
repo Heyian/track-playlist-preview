@@ -112,6 +112,14 @@ Sources: spicetify/actions `f1eb217` (`publish/action.yml`, `README.md`); spicet
 8. **Repo state.** No `.github/`. Actions may not create PRs
    (`can_approve_pull_request_reviews: false`). No tags or releases. `package.json` is at `0.1.0`.
    Commits are plain imperative sentences, and PRs are merged with merge commits.
+9. **The CLI reads `authors` as strings only** (found during implementation). CLI
+   `3.0.0-beta.19` deserializes `metadata.json` into `ModuleMetadata { authors: Vec<String> }`
+   (`module/stage.rs:39`). An object author fails the parse, and `spicetify apply` skips the whole
+   module with the warning `skipping module <id>: unreadable metadata`, so it never loads. Kit's
+   check, the publish action and the validator all accept strings: the action maps `"Heyian"` to
+   `{ "name": "Heyian" }`, and the validator compares author names only. **Consequence: `authors`
+   is `["Heyian"]`.** The store card has no GitHub link for the author unless the entry adds
+   `github` by hand.
 
 ## Decisions
 
@@ -129,7 +137,7 @@ Decided while grilling (Q1–Q11):
 | Q7 | The **first release runs print-only**: no token. The user installs that exact zip on a clean setup, then opens the store PR by hand. The token is added afterwards, and later releases submit automatically. |
 | Q8 | The user enables "Allow GitHub Actions to create and approve pull requests". release-please uses `GITHUB_TOKEN`. A new `ci.yml` runs the check. |
 | Q9 | **`src/metadata.json` is committed** and is the source of the module metadata. release-please bumps its version, and a test keeps it equal to `package.json`. |
-| Q10 | Card: `authors: [{ "name": "Heyian", "github": "Heyian" }]`, description "Brings back Spotify's removed track preview and extends it to whole playlists, albums, artists and Liked Songs." |
+| Q10 | Card: `authors: ["Heyian"]` (strings; see finding 9), description "Brings back Spotify's removed track preview and extends it to whole playlists, albums, artists and Liked Songs." |
 | Q11 | Kit's hot-push dev loop is **out of scope** (#14). |
 
 Defaults stated during grilling and not contested: kit's bundled classmap, no `--refresh`; output
@@ -146,7 +154,7 @@ unminified, with the sourcemap shipped; README makes the store the primary insta
     "name": "track-playlist-preview",
     "version": "0.1.0",
     "description": "Brings back Spotify's removed track preview and extends it to whole playlists, albums, artists and Liked Songs.",
-    "authors": [{ "name": "Heyian", "github": "Heyian" }],
+    "authors": ["Heyian"],
     "entries": { "js": "index.js", "css": "index.css" },
     "hasMixins": false,
     "dependencies": { "stdlib": "^1.13.0" },
@@ -237,7 +245,7 @@ unminified, with the sourcemap shipped; README makes the store the primary insta
   - `preview` = `https://raw.githubusercontent.com/Heyian/track-playlist-preview/main/docs/preview.png`;
   - `repository` = `https://github.com/Heyian/track-playlist-preview`;
   - `license` = `MIT`;
-  - `authors` = `[{ "name": "Heyian", "github": "Heyian" }]`;
+  - `authors` = `["Heyian"]`, strings only (finding 9);
   - `dependencies.stdlib` = `^1.13.0`;
   - `entries` = `{ "js": "index.js", "css": "index.css" }`;
   - neither a `tags` nor a `kind` key.

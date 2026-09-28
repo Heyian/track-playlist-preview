@@ -25,7 +25,8 @@ describe("src/metadata.json", () => {
     expect(meta.preview).toBe("https://raw.githubusercontent.com/Heyian/track-playlist-preview/main/docs/preview.png");
     expect(meta.repository).toBe("https://github.com/Heyian/track-playlist-preview");
     expect(meta.license).toBe("MIT");
-    expect(meta.authors).toEqual([{ name: "Heyian", github: "Heyian" }]);
+    // CLI 3.0.0-beta.19 parses authors as strings and skips a module whose authors are objects.
+    expect(meta.authors).toEqual(["Heyian"]);
     expect(meta.dependencies).toEqual({ stdlib: "^1.13.0" });
     expect(meta.entries).toEqual({ js: "index.js", css: "index.css" });
     expect("tags" in meta).toBe(false);
