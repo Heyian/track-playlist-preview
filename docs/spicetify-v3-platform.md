@@ -43,7 +43,8 @@ Source: `spicetify/cli` `src/jsHelper/modularLoader/registry.ts` (`checkDependen
   once at import. When a module is evaluated, `Spicetify.React` is already set: a bundle that reads
   it at top level (Bun's `react` → `Spicetify.React` alias does) loads and renders.
   Verified 2026-09-27 over CDP: `Modules.report.loaded` lists `stdlib` then
-  `track-playlist-preview`, `failed` is empty, and one injected `<style>` is present.
+  `track-playlist-preview`, and `failed` is empty. (The stylesheet now ships as `entries.css`; see
+  "Unload, enable and reload".)
 - Bun's bundler, with `format: "esm"` and `external: ["/modules/stdlib/*"]`, leaves both stdlib
   import specifiers verbatim in the output (no plugin needed).
 
@@ -80,6 +81,46 @@ probe of `(await import("/modules/stdlib/mod.js")).React`.
 
 Source: stdlib `src/registers/settingsSection.js`; manager `index.js`; `spicetify/modules`
 `BEST_PRACTICES.md` § "Put settings where their effect is clear", `docs/module-standard.md`.
+
+## Unload, enable and reload
+
+- **Disposers.** Each module has one disposer list, which `unload()` runs in **reverse order** of
+  registration. Each disposer is awaited inside its own `try/catch`: a failure is logged
+  ("error unloading …") and the rest still run. Registration order: preload's `ctx.defer`s,
+  preload's return value, the `entries.css` disposer, the `color.ini` disposer, load's `ctx.defer`s,
+  load's return value. `Spicetify.Modules.disable(id)` and `unload(id)` run them; `reload(id)` is
+  unload then enable (the `manager` module's Reload button calls it). Quitting Spotify runs none.
+- **Enable does not re-import.** The loader caches the imported module namespace; `enable()` runs
+  `preload`/`load` again on the cached object. Top-level code runs once per page, so module-scope
+  state and top-level DOM side effects survive disable → enable. Only `Modules.installLocal`
+  re-imports new code; an on-disk module picks up new code only after `spicetify apply`.
+- **Partial load leaks.** If `load()` throws, the disposers it already registered never run:
+  `enable` leaves `loaded=false`, and `unload()` returns early when the module is not loaded. A
+  module must undo its own partial work before re-throwing.
+- **`entries.css`.** `metadata.json` `entries: { js?, css? }`; both may be set. The loader fetches
+  `/modules/<id>/<css>`, builds a constructable `CSSStyleSheet` (plain-text fallback when it holds
+  `@import`), pushes it onto `document.adoptedStyleSheets` between preload and load, and registers
+  a disposer that removes it. It is re-adopted on every enable. A module with CSS also triggers a
+  fetch of `/modules/<id>/color.ini`; a 404 is harmless.
+- **`Spicetify.ContextMenu.Item`** comes from the CLI's spicetifyWrapper (`menus.js`), not stdlib.
+  `deregister()` calls `Spicetify.ContextMenuV2.unregisterItem`, which `Item` looks up on the
+  global at call time. Items render from a private map on each menu render, so a deregistered item
+  is gone from the next menu opened; a menu already open is not re-rendered and keeps showing it.
+- **`Spicetify.Platform.History.listen`** returns an unlisten function (history v4 `appendListener`).
+- stdlib's registrar has no context-menu type with URI access: its `menu` type receives
+  `props: null` in the live client, so `ContextMenu.Item` stays.
+- **`ctx`** is `{ spotifyVersion, identifier, defer }`; `defer` accepts a function returning
+  `void | Promise<void>`.
+- Verified 2026-09-27 over CDP: `Spicetify.ReactDOM.createRoot(host).render(…)` then
+  `root.unmount()` leaves `host` with no children, and a second `createRoot` on a fresh host
+  renders (spike s1). After the `entries.css` build and `spicetify apply`, exactly one adopted
+  sheet mentions `.tpp-panel`, no `<style>` does, and `Modules.report.failed` is empty (spike s2).
+  `node scripts/check-unload.mjs` checks the whole disable → enable cycle live.
+
+Source: `/opt/spotify/Apps/xpui/hooks/modularLoader.js`, matching `spicetify/cli` branch `v3-beta`
+`src/jsHelper/modularLoader/{index,registry,types}.ts` (commit b50800b; `registry.ts` l.294-318,
+l.398-417, l.470-489); installed `/opt/spotify/Apps/xpui/hooks/spicetifyWrapper.js` (`ContextMenu.Item`); CDP probes; `spicetify/modules`
+`docs/module-standard.md` § "Dispose what you touch".
 
 ## Client and devtools
 
