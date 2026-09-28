@@ -128,11 +128,49 @@ l.398-417, l.470-489); installed `/opt/spotify/Apps/xpui/hooks/spicetifyWrapper.
 - `spicetify dev` enables developer mode ("app-developer mode in offline.bnk"); Spotify then serves
   the DevTools Protocol on `127.0.0.1:8088`. v2's `always_enable_devtools` config key does not
   apply.
-- On 2026-09-27, `spicetify apply` followed by `spicetify dev` left nothing listening on 8088.
-  Setting `spotify_launch_flags = --remote-debugging-port=8088` in
-  `~/.config/spicetify/config-xpui.ini` and re-running `spicetify apply` brought CDP up.
+- CLI 3.0.0-beta.19 launches `/opt/spotify/spotify` with no arguments and has no launch-flag
+  option (`spicetify --help`, `restart --help`); `config.toml` has no such key, and the v2
+  `config-xpui.ini` `spotify_launch_flags` line has no effect (checked 2026-09-28: with the line
+  set, Spotify after `apply` listened on no debug port). An earlier note here credited that line
+  with bringing CDP up on 2026-09-27; that Spotify had most likely been launched by hand.
+- To get CDP, relaunch Spotify after each `apply`:
+  `pkill -x spotify; sleep 3; setsid /opt/spotify/spotify --remote-debugging-port=8088 &`. On Arch,
+  `/usr/bin/spotify` also reads flags from `~/.config/spotify-flags.conf`, but the CLI does not use
+  that wrapper.
 
 Source: `/opt/spotify/libcef.so`; `spicetify dev --help`; the CLI binary's strings.
+
+## Module store and packaging
+
+Checked 2026-09-28 — CLI 3.0.0-beta.19, `@spicetify/kit` 0.3.1, `spicetify/actions` `publish@v1`.
+Full detail: [store-publishing spec](specs/2026-09-28-store-publishing-design.md) § "Investigation
+Findings".
+
+- **`authors` must be strings.** The CLI deserializes `metadata.json` as
+  `ModuleMetadata { authors: Vec<String> }`. One object author (`{ "name", "github" }`) fails the
+  parse, and `apply` skips the whole module (`skipping module <id>: unreadable metadata`) — it is
+  absent from `Spicetify.Modules.list()`. Kit, the publish action and the store validator accept
+  strings.
+- **Declare neither `tags` nor `kind`.** The publish action copies `tags` into the store entry and
+  drops `kind`; the validator derives `kind` and drops `tags`. Any of the three fails validation.
+  The store lists such a module under Extensions.
+- **The `spicetify-module.json` sidecar is only a marker.** The CLI skips it when staging and the
+  store ignores it; the validator only checks it exists, as proof the zip came from
+  `spicetify-kit build`.
+- **Store installs.** The CLI picks the `enabled` version, else the highest, tries each artifact URL,
+  checks the sha256 (a mismatch aborts), unzips to `<config>/store/<id>/<version>`, and
+  `pkg enable` symlinks that into `modules/<id>`. `spicetify pkg install <id> <url>` skips
+  verification.
+- **Kit.** `spicetify-kit build src` bundles, compiles `src/index.scss` to `index.css`, copies
+  `src/metadata.json`, writes the sidecar and fails on an error-tier finding. It rewrites `react`
+  imports to `/modules/stdlib/src/expose/react-shim.js`, rejects CSS imported from TS, and writes
+  `src/classmap.d.ts` each build. It must run under Node ≥ 22: under Bun, sass fails with
+  `Invalid protobuf: Error: illegal tag: field no 0 wire type 0.`
+
+Source: `spicetify/cli` tag `v3.0.0-beta.19` `rust/crates/spicetify/src/module/stage.rs` (l.24,
+l.39, l.389-395); `spicetify/actions` `publish/action.yml`; `spicetify/modules`
+`scripts/validate-submission.ts`; `node_modules/@spicetify/kit/dist/{check,vault}.js`; live
+`spicetify apply` runs.
 
 ## Spotify Platform APIs
 
