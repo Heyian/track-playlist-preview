@@ -421,3 +421,74 @@ describe("previewController", () => {
     expect(t.panel.open).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("previewController dispose (U3, U4)", () => {
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((r) => (resolve = r));
+    return { promise, resolve };
+  }
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+
+  it.each([
+    {
+      stage: "enumerate",
+      make: () => {
+        const d = deferred<TrackRef[]>();
+        return { d, value: queue, overrides: { enumerate: vi.fn(() => d.promise) }, start: (t: ReturnType<typeof setup>) => t.controller.startCollection(ALBUM) };
+      },
+    },
+    {
+      stage: "fetchTrackRef",
+      make: () => {
+        const d = deferred<TrackRef>();
+        return { d, value: a, overrides: { fetchTrackRef: vi.fn(() => d.promise) }, start: (t: ReturnType<typeof setup>) => t.controller.startTrack(a.uri) };
+      },
+    },
+    {
+      stage: "collectionLabel",
+      make: () => {
+        const d = deferred<string>();
+        return { d, value: "Chill Mix", overrides: { collectionLabel: vi.fn(() => d.promise) }, start: (t: ReturnType<typeof setup>) => t.controller.startCollection(P) };
+      },
+    },
+    {
+      stage: "playlistMetadata",
+      make: () => {
+        const d = deferred<PlaylistMetadata>();
+        return { d, value: { canRemove: true }, overrides: { playlistMetadata: vi.fn(() => d.promise) }, start: (t: ReturnType<typeof setup>) => t.controller.startCollection(P) };
+      },
+    },
+  ])("U3: unload during the $stage stage begins no session", async ({ make }) => {
+    const { d, value, overrides, start } = make();
+    const t = setup(overrides as Partial<ControllerDeps>);
+    const started = start(t);
+    await tick(); // reach the pending await
+    t.controller.dispose();
+    (d.resolve as (v: unknown) => void)(value);
+    await started;
+    expect(t.coordinator.acquire).not.toHaveBeenCalled();
+    expect(t.engine.start).not.toHaveBeenCalled();
+    expect(t.panel.open).not.toHaveBeenCalled();
+  });
+
+  it("U4: after dispose, every entry point is inert", async () => {
+    const t = setup();
+    await t.controller.startCollection(P);
+    vi.clearAllMocks();
+    t.controller.dispose();
+    vi.clearAllMocks();
+    await t.controller.startCollection(P);
+    await t.controller.startTrack(a.uri);
+    await t.controller.startFromHere(a.uri, P);
+    t.controller.toggleCollection(ALBUM);
+    t.controller.next();
+    t.controller.removeCurrent();
+    await tick();
+    expect(t.coordinator.acquire).not.toHaveBeenCalled();
+    expect(t.engine.start).not.toHaveBeenCalled();
+    expect(t.engine.skip).not.toHaveBeenCalled();
+    expect(t.panel.open).not.toHaveBeenCalled();
+    expect(t.pendingRemovals.schedule).not.toHaveBeenCalled();
+  });
+});

@@ -48,6 +48,9 @@ export function createPreviewController(deps: ControllerDeps) {
   // Bumped at the top of every start and by stop(). A start whose seq has moved
   // on after any await returns, so the latest start or stop wins (Review focus 1).
   let startSeq = 0;
+  // Set by dispose() (unload). Every entry point then returns without effect, so
+  // a context menu left open across the unload cannot start a session (U4, D2).
+  let disposed = false;
 
   function show(view: PanelView): void {
     lastView = view;
@@ -158,12 +161,14 @@ export function createPreviewController(deps: ControllerDeps) {
   }
 
   async function startTrack(uri: string): Promise<void> {
+    if (disposed) return;
     const seq = ++startSeq;
     const ref = await deps.fetchTrackRef(uri); // AC36 single-track
     await beginSession(seq, [ref], 0, null);
   }
 
   async function startCollection(uri: string, startIndex = 0): Promise<void> {
+    if (disposed) return;
     const seq = ++startSeq;
     let queue: TrackRef[];
     try {
@@ -182,6 +187,7 @@ export function createPreviewController(deps: ControllerDeps) {
     async startFromHere(uri: string, contextUri?: string): Promise<void> {
       // AC36: within a collection, start at this track inside the full queue.
       // AC37: outside a collection context, fall back to a single-track preview.
+      if (disposed) return;
       const type = contextUri ? deps.collectionTypeForUri(contextUri) : null;
       if (!contextUri || type === null) {
         await startTrack(uri);
@@ -205,6 +211,7 @@ export function createPreviewController(deps: ControllerDeps) {
     },
     toggleCollection(uri: string): void {
       // AC34: clicking the action-bar button during this collection's session stops it.
+      if (disposed) return;
       if (session?.collectionUri === uri && deps.engine.isActive()) {
         stop();
       } else {
@@ -212,14 +219,22 @@ export function createPreviewController(deps: ControllerDeps) {
       }
     },
     stop,
+    /**
+     * Unload (U1–U4): ends any session — the coordinator resumes Spotify only
+     * if it paused it — cancels a pending start, and makes every entry point inert.
+     */
+    dispose(): void {
+      stop();
+      disposed = true;
+    },
     /** AC52: advance immediately; no-op when idle. */
     next(): void {
-      if (!deps.engine.isActive()) return;
+      if (disposed || !deps.engine.isActive()) return;
       advance();
     },
     /** R5/R6: schedule removal of the current entry, then advance as Next does. */
     removeCurrent(): void {
-      if (!session?.removable || session.collectionUri === null || !deps.engine.isActive()) return;
+      if (disposed || !session?.removable || session.collectionUri === null || !deps.engine.isActive()) return;
       const track = deps.engine.currentTrack();
       if (track === null) return;
       deps.pendingRemovals.schedule(session.collectionUri, session.label ?? GENERIC_LABEL.playlist, track);
