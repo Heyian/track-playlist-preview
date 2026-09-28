@@ -1,6 +1,8 @@
 // src/index.ts
 // Entry point: the v3 loader calls load(ctx). It waits (capped) for client
-// readiness, then builds live adapters, wires the pure core and registers UI.
+// readiness, then builds one wiring — live adapters, the pure core and the UI —
+// and registers its dispose with ctx.defer. Every load() builds a fresh wiring,
+// and unload disposes all of it (unload-teardown spec, U20–U24).
 import { createSettings, type Settings } from "./settings";
 import { createPreviewSource } from "./previewSource";
 import { enumerate, collectionTypeForUri } from "./collections";
@@ -30,6 +32,7 @@ import { progressFraction } from "./ui/previewPanel.view";
 import { createContextMenus } from "./ui/contextMenus";
 import { registerSettingsSection, type ModuleRuntimeContext } from "./ui/settingsSection";
 import { waitForClient, READY_TIMEOUT_MS } from "./waitForClient";
+import { createDisposer } from "./teardown";
 import type { CollectionType } from "./types/domain";
 
 /** The client-readiness globals still absent, as `"Spicetify.<Name>"`. */
@@ -38,21 +41,37 @@ function missingGlobals(): string[] {
   return (["React", "ReactDOM", "ContextMenu", "Platform"] as const).filter((name) => !s?.[name]).map((name) => `Spicetify.${name}`);
 }
 
-// The loader imports this file once but calls load() again each time the
-// module is re-enabled. Unload removes only registrar items (full teardown is
-// #8), so everything else is wired once and kept.
-let wired: Settings | undefined;
-
 export async function load(ctx: ModuleRuntimeContext): Promise<void> {
   // Rejects after READY_TIMEOUT_MS; the loader then records the module as failed (S4, S18).
   await waitForClient({ missing: missingGlobals, timer: realTimer, timeoutMs: READY_TIMEOUT_MS });
 
-  wired ??= wire();
-  registerSettingsSection(ctx, wired);
+  const { settings, dispose } = wire(); // throws → already disposed (U22)
+  // Deferred before the registrar exists, so on unload (reverse order) the
+  // settings section goes first, then this wiring.
+  ctx.defer(dispose);
+  registerSettingsSection(ctx, settings);
 }
 
-/** Build live adapters, wire the pure core and register the non-registrar UI. */
-function wire(): Settings {
+/**
+ * Build live adapters, wire the pure core and register the non-registrar UI.
+ * Each piece's teardown is recorded as soon as the piece exists, so a throw
+ * part-way disposes what was built (in reverse) and re-throws (U22).
+ */
+function wire(): { settings: Settings; dispose: () => void } {
+  const built: (() => void)[] = [];
+  try {
+    return build(built);
+  } catch (error) {
+    try {
+      createDisposer([...built].reverse())();
+    } catch {
+      // The original error is the one load() reports.
+    }
+    throw error;
+  }
+}
+
+function build(built: (() => void)[]): { settings: Settings; dispose: () => void } {
   const settings = createSettings(localStorageAdapter);
   const source = createPreviewSource(trackPreviewRequest);
   const collectionDeps = createCollectionDeps();
@@ -67,6 +86,7 @@ function wire(): Settings {
     remove: playlistRemove,
     onError: (title, playlist) => notifications.error(removalFailedMessage(title, playlist)), // R15
   });
+  built.push(() => pendingRemovals.flush());
 
   // Late binding: the panel and engine call into the controller, which is
   // built after them. Each lambda resolves `controller` at call time.
@@ -81,6 +101,7 @@ function wire(): Settings {
     getPanelPosition: () => settings.getPanelPosition(),
     onSettingsChange: (listener) => settings.onChange(listener),
   });
+  built.push(() => panel.dispose());
   const engine = createPreviewEngine({
     audio,
     timer: realTimer,
@@ -104,6 +125,7 @@ function wire(): Settings {
     playlistMetadata,
     pendingRemovals,
   });
+  built.push(() => controller.dispose());
 
   const actionBar = createActionBarButton({
     isEnabledForCurrentPage: () => {
@@ -116,6 +138,7 @@ function wire(): Settings {
     onToggle: (uri) => controller.toggleCollection(uri),
     currentUri: () => currentCollectionUri(),
   });
+  built.push(() => actionBar.stop());
 
   const contextMenus = createContextMenus({
     collectionTypeForUri: classify,
@@ -127,10 +150,22 @@ function wire(): Settings {
     currentCollectionUri: () => currentCollectionUri(),
     onSettingsChange: (listener) => settings.onChange(listener),
   });
+  built.push(() => contextMenus.dispose());
 
   actionBar.start();
   contextMenus.register();
-  return settings;
+
+  // Unload order (spec: Teardown steps): end the session first so playback is
+  // restored, then commit pending removals (U6), then remove the UI.
+  const dispose = createDisposer([
+    () => controller.dispose(),
+    () => pendingRemovals.flush(),
+    () => contextMenus.dispose(),
+    () => actionBar.stop(),
+    () => panel.dispose(),
+    () => rowHighlight.clear(),
+  ]);
+  return { settings, dispose };
 }
 
 /** The collection URI for the page currently shown, or null. */

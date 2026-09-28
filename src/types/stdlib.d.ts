@@ -8,8 +8,9 @@
 declare module "*/modules/stdlib/mod.js" {
   /** The context the v3 loader passes to a module's `load(ctx)`. */
   export interface ModuleRuntimeContext {
+    spotifyVersion: string;
     identifier: string;
-    defer(fn: () => void): void;
+    defer(fn: () => void | Promise<void>): void;
   }
 
   export interface Registrar {
