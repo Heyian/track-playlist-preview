@@ -300,8 +300,10 @@ unminified, with the sourcemap shipped; README makes the store the primary insta
 
 - #14 — Adopt spicetify-kit's hot-push dev loop.
 
-The upstream bug reports (Q4, Q4b) are filed on spicetify/actions and spicetify/modules after user
-approval. They are not deferrals of this work.
+Upstream bug reports (Q4, Q4b), not deferrals of this work:
+[spicetify/actions#2](https://github.com/spicetify/actions/issues/2) and
+[spicetify/modules#27](https://github.com/spicetify/modules/issues/27). Once both are fixed, the
+module metadata may declare `"kind": "extension"`.
 
 ## Glossary Updates & ADRs
 
