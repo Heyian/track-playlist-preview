@@ -148,7 +148,7 @@ CSS keys off. `place()` runs:
   nothing moves.
 
 `place()` never touches focus and never changes the panel's view: the session is not restarted.
-The listener's unsubscribe function is left for #8 to call on unload (noted on #8).
+The listener's unsubscribe function is left for #8 to call on unload (noted on #8). _— addressed by the [unload-teardown spec](2026-09-27-unload-teardown-design.md) (U17)._
 
 `previewPanel.css` gets per-`data-position` rules for the panel's anchor (`right`/`bottom`,
 `right`/`top`, or the centred `left`/`top`) and the stack's anchor (`bottom` + ceiling-based
@@ -265,7 +265,7 @@ right-edge rules stay as they are under `data-position="right"`.
 ## Deferred Items
 
 None filed by this spec. Related: #8 (unload teardown) now also covers removing the panel's
-settings listener. A comment was added there on 2026-09-27.
+settings listener. A comment was added there on 2026-09-27. _— addressed by the [unload-teardown spec](2026-09-27-unload-teardown-design.md) (U17)._
 
 ## Glossary Updates & ADRs
 
