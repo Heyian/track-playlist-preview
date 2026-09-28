@@ -121,6 +121,14 @@ export function createPendingRemovals(deps: PendingRemovalsDeps) {
         .filter((entry) => entry.status === "pending")
         .map(({ handle, trackTitle, playlistName }) => ({ handle, trackTitle, playlistName }));
     },
+    /** Commits every pending removal now instead of when its Undo window ends (U6–U9). */
+    flush(): void {
+      for (const entry of entries.values()) {
+        if (entry.status !== "pending") continue;
+        if (entry.timerId !== null) deps.timer.clearTimeout(entry.timerId);
+        commit(entry);
+      }
+    },
     subscribe(listener: () => void): () => void {
       listeners.add(listener);
       return () => void listeners.delete(listener);
