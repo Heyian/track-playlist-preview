@@ -15,13 +15,21 @@ export interface PanelHostDeps {
 
 export function mountPanelHost(deps: PanelHostDeps): { host: HTMLElement; dispose(): void } {
   let host = document.getElementById(ROOT_ID);
+  const created = !host;
   if (!host) {
     host = document.createElement("div");
     host.id = ROOT_ID;
     document.body.appendChild(host);
   }
   const el = host;
-  const root = deps.mount(el);
+  let root: { unmount(): void };
+  try {
+    root = deps.mount(el);
+  } catch (error) {
+    // createPreviewPanel never returns, so wire()'s rollback cannot reach this host (U22).
+    if (created) el.remove();
+    throw error;
+  }
   // Re-place on every settings change, open or closed (panel-position spec, D3).
   const unsubscribe = deps.onSettingsChange(() => deps.place(el));
   let disposed = false;

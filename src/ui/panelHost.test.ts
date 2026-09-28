@@ -62,4 +62,15 @@ describe("mountPanelHost", () => {
     expect(host).toBe(existing);
     expect(document.querySelectorAll(`#${ROOT_ID}`)).toHaveLength(1);
   });
+
+  it("U22: a throwing mount removes the host it created and re-throws", () => {
+    const t = setup();
+    const boom = new Error("boom");
+    t.deps.mount.mockImplementationOnce(() => {
+      throw boom;
+    });
+    expect(() => mountPanelHost(t.deps)).toThrow(boom);
+    expect(document.getElementById(ROOT_ID)).toBeNull();
+    expect(t.deps.onSettingsChange).not.toHaveBeenCalled();
+  });
 });
