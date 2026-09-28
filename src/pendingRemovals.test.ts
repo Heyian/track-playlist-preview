@@ -166,3 +166,66 @@ describe("pendingRemovals", () => {
     expect(m2).toBeGreaterThan(m1);
   });
 });
+
+describe("flush (U6–U9)", () => {
+  const b: TrackRef = { uri: "spotify:track:b", name: "Other", artist: "Y" };
+
+  it("U6: every pending removal is committed now; the timer adds nothing", async () => {
+    const h = setup();
+    h.pr.schedule(P, "Chill Mix", a);
+    h.pr.schedule(P, "Chill Mix", b);
+    const before = h.timer.ids();
+    h.pr.flush();
+    await tick();
+    expect(h.remove.mock.calls).toEqual([
+      [P, a.uri],
+      [P, b.uri],
+    ]);
+    expect(h.timer.ids()).toEqual([]);
+    for (const id of before) h.timer.fire(id);
+    await tick();
+    expect(h.remove).toHaveBeenCalledTimes(2);
+  });
+
+  it("U7: flushed handles cannot be undone and are not listed", () => {
+    const h = setup();
+    const h1 = h.pr.schedule(P, "Chill Mix", a);
+    const h2 = h.pr.schedule(P, "Chill Mix", b);
+    h.pr.flush();
+    expect(h.pr.undo(h1)).toBe(false);
+    expect(h.pr.undo(h2)).toBe(false);
+    expect(h.pr.list()).toEqual([]);
+  });
+
+  it("U8: a flushed removal whose remove rejects reports once", async () => {
+    const h = setup(async () => {
+      throw new Error("nope");
+    });
+    h.pr.schedule(P, "Chill Mix", a);
+    h.pr.flush();
+    await tick();
+    expect(h.onError).toHaveBeenCalledExactlyOnceWith("Title", "Chill Mix");
+  });
+
+  it("U9: undone, in-flight, succeeded and failed removals are left alone", async () => {
+    const c: TrackRef = { uri: "spotify:track:c", name: "C", artist: "Z" };
+    const d: TrackRef = { uri: "spotify:track:d", name: "D", artist: "W" };
+    const h = setup((_p, trackUri) => {
+      if (trackUri === b.uri) return new Promise<void>(() => {}); // never settles
+      if (trackUri === d.uri) return Promise.reject(new Error("nope"));
+      return Promise.resolve();
+    });
+    const undone = h.pr.schedule(P, "Chill Mix", a);
+    h.pr.undo(undone);
+    for (const track of [b, c, d]) {
+      h.pr.schedule(P, "Chill Mix", track);
+      const [id] = h.timer.ids();
+      h.timer.fire(id!);
+    }
+    await tick();
+    const calls = h.remove.mock.calls.length;
+    h.pr.flush();
+    await tick();
+    expect(h.remove).toHaveBeenCalledTimes(calls);
+  });
+});

@@ -86,7 +86,7 @@ current upstream stdlib version), by source reading and over CDP (`scripts/cdp-e
 | Q3 | Duration and gap are entered in seconds; storage stays in ms. |
 | Q4 | Fix the stale *Preview track (Ns)* label in this change. |
 | Q5 | Keep the storage key and `Spicetify.LocalStorage`; no migration. |
-| Q6 | Only the registrar's items are removed on unload in this change; full teardown is #8. |
+| Q6 | Only the registrar's items are removed on unload in this change; full teardown is #8. _Superseded by the [unload-teardown spec](2026-09-27-unload-teardown-design.md): unload now disposes everything._ |
 | Q7 | One client-readiness wait, capped at `READY_TIMEOUT_MS` (10 000 ms); on timeout `load()` throws. |
 | Q8 | Duration ≥ `MIN_DURATION_MS` (1000 ms), gap ≥ 0 ms, no upper bound; other values are ignored. |
 
@@ -131,6 +131,8 @@ accepted setter call (duration, gap, collection toggle) calls each listener once
 
 **Unload.** Disabling the module (`Spicetify.Modules.disable("track-playlist-preview")`) removes the
 settings section via the registrar. Everything else stays mounted until #8.
+
+_Superseded by the [unload-teardown spec](2026-09-27-unload-teardown-design.md): unload now disposes everything._
 
 ### Modules
 

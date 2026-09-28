@@ -77,10 +77,11 @@ bun run test         # tests only
 After any build, run `spicetify apply` for Spotify to pick up the change. It force-restarts Spotify.
 
 The bundler is a small [Bun](https://bun.com/docs/bundler) script in [`build.ts`](build.ts). It
-aliases `react` / `react-dom` to Spotify's own `Spicetify.React` / `Spicetify.ReactDOM`, inlines any
-imported CSS into the output bundle, wraps everything so the module waits for Spicetify to finish
-loading before running, and writes the v3 module's `index.js` and `metadata.json` (version taken from
-`package.json`).
+aliases `react` / `react-dom` to Spotify's own `Spicetify.React` / `Spicetify.ReactDOM` and writes
+the v3 module's `index.js`, `index.css` and `metadata.json` (version taken from `package.json`).
+Imported CSS goes to `index.css`, which `metadata.json` declares as `entries.css`: Spicetify's loader
+adopts the stylesheet when the module loads and removes it when the module is disabled. `index.js`
+exports `load(ctx)`, which waits (capped) for Spicetify to finish loading before wiring anything.
 
 ### Debugging against the live client
 
@@ -92,6 +93,10 @@ clicking through the UI:
 ```bash
 node scripts/cdp-eval.mjs 'JSON.stringify(Spicetify.Modules.report)'
 ```
+
+`node scripts/check-unload.mjs` checks that disabling the module removes everything it added and that
+re-enabling it adds each piece back exactly once. It previews Liked Songs first, which interrupts
+Spotify playback for a few seconds; pass `--no-session` to skip that part.
 
 ## Caveats
 

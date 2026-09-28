@@ -15,6 +15,11 @@ export interface ContextMenuDeps {
 }
 
 export function createContextMenus(deps: ContextMenuDeps) {
+  // Only items whose register() returned, so a throw mid-register leaves
+  // dispose() exactly the items to deregister (U14).
+  let registered: { deregister(): void }[] = [];
+  let unsubscribe: (() => void) | null = null;
+
   return {
     register(): void {
       // Collection menu item — one URI, an enabled collection type (AC35).
@@ -33,6 +38,7 @@ export function createContextMenus(deps: ContextMenuDeps) {
         "play",
       );
       collectionItem.register();
+      registered.push(collectionItem);
 
       // Track menu items — a single track URI (AC36/AC37).
       const isSingleTrack = (uris: string[]): boolean =>
@@ -48,8 +54,9 @@ export function createContextMenus(deps: ContextMenuDeps) {
         "play",
       );
       previewTrack.register();
+      registered.push(previewTrack);
       // The name setter relabels a registered item in place (S13).
-      deps.onSettingsChange(() => {
+      unsubscribe = deps.onSettingsChange(() => {
         previewTrack.name = trackLabel();
       });
 
@@ -66,6 +73,15 @@ export function createContextMenus(deps: ContextMenuDeps) {
         "play",
       );
       previewFromHere.register();
+      registered.push(previewFromHere);
+    },
+    /** Unload: deregister every item and drop the relabel subscription (U14, U15). */
+    dispose(): void {
+      const items = registered;
+      registered = [];
+      unsubscribe?.();
+      unsubscribe = null;
+      for (const item of items) item.deregister();
     },
   };
 }

@@ -3,12 +3,15 @@
 // stack, rendered into one body-level React root, placed per Panel position
 // (panel-position spec, P1–P20). A pure consumer of controller
 // calls: it renders a PanelView and calls back through PreviewPanelDeps. No
-// Spicetify.Player, no PopupModal (spec: Layering, spike p1).
+// Spicetify.Player, no PopupModal (spec: Layering, spike p1). dispose() unmounts
+// the root, removes the host and drops the placement subscription on unload
+// (unload-teardown spec, U16/U17).
 import React from "react";
 import type { PanelPort, PanelPosition, PanelView, ProgressMode } from "../types/domain";
 import type { PendingRemovalEntry } from "../pendingRemovals";
 import { panelKeyAction, panelPlacement, placementStyle, PANEL_KEYS, type PanelPlacement } from "./previewPanel.view";
 import { PendingRemovalsStack, tertiaryClass } from "./pendingRemovalsStack";
+import { mountPanelHost } from "./panelHost";
 import "./previewPanel.css";
 
 export interface PreviewPanelDeps {
@@ -28,7 +31,6 @@ export interface PreviewPanelDeps {
   onSettingsChange(listener: () => void): () => void;
 }
 
-const ROOT_ID = "tpp-preview-root";
 const PLAYBAR = ".Root__now-playing-bar";
 const GLOBAL_NAV = ".Root__globalNav";
 
@@ -238,33 +240,33 @@ function PreviewRoot(props: { store: Store; deps: PreviewPanelDeps }): React.Rea
   );
 }
 
-export function createPreviewPanel(deps: PreviewPanelDeps): PanelPort {
-  let host = document.getElementById(ROOT_ID);
-  if (!host) {
-    host = document.createElement("div");
-    host.id = ROOT_ID;
-    document.body.appendChild(host);
-  }
-  const rootEl = host;
+export type PreviewPanel = PanelPort & { dispose(): void };
 
+/** Writes the measured placement to the host; never touches focus or the store (P12). */
+function place(host: HTMLElement, position: PanelPosition): void {
+  const style = placementStyle(measurePlacement(position));
+  for (const [name, value] of Object.entries(style.vars)) host.style.setProperty(name, value);
+  host.dataset.position = style.position;
+  host.dataset.stack = style.stack;
+}
+
+export function createPreviewPanel(deps: PreviewPanelDeps): PreviewPanel {
   const store = createStore({ view: null, focusSeq: 0 });
-  // Spike p1: createRoot is the render API (not ReactDOM.render).
-  Spicetify.ReactDOM.createRoot(rootEl).render(<PreviewRoot store={store} deps={deps} />);
-
-  /** Writes the measured placement to the root; never touches focus or the store (P12). */
-  function place(): void {
-    const style = placementStyle(measurePlacement(deps.getPanelPosition()));
-    for (const [name, value] of Object.entries(style.vars)) rootEl.style.setProperty(name, value);
-    rootEl.dataset.position = style.position;
-    rootEl.dataset.stack = style.stack;
-  }
-  // Re-place on every settings change, open or closed (D3). Unsubscribe on unload is #8.
-  deps.onSettingsChange(place);
+  const { host, dispose } = mountPanelHost({
+    mount(el) {
+      // Spike p1: createRoot is the render API (not ReactDOM.render).
+      const root = Spicetify.ReactDOM.createRoot(el);
+      root.render(<PreviewRoot store={store} deps={deps} />);
+      return root;
+    },
+    onSettingsChange: deps.onSettingsChange,
+    place: (el) => place(el, deps.getPanelPosition()),
+  });
 
   return {
     open(view: PanelView): void {
       // Placement is measured per open(); the stack's anchor derives from it in CSS.
-      place();
+      place(host, deps.getPanelPosition());
       const s = store.get();
       store.set({ view, focusSeq: s.focusSeq + 1 });
     },
@@ -275,5 +277,6 @@ export function createPreviewPanel(deps: PreviewPanelDeps): PanelPort {
       // AC51: a controller-driven close never calls onClose / onStop.
       store.set({ ...store.get(), view: null });
     },
+    dispose,
   };
 }

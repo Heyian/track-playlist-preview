@@ -4,21 +4,22 @@
 //   bun run build:local   → build into ./dist, minified, without installing
 //   bun run watch         → rebuild on change
 //
-// A Spicetify v3 module is a folder `<modules>/<id>/` holding the entry script
-// and a `metadata.json`. Run `spicetify apply` after building to stage it.
-// This script reproduces the three things the entry script needs:
+// A Spicetify v3 module is a folder `<modules>/<id>/` holding the entry script,
+// an optional stylesheet and a `metadata.json`. Run `spicetify apply` after
+// building to stage it. This script reproduces the three things the module needs:
 //
 //   1. `react` / `react-dom` resolve to Spotify's own copies on the `Spicetify`
 //      global rather than being bundled — two React instances in one page break
 //      hooks.
-//   2. Imported CSS is inlined into the JS bundle and injected as a <style> tag,
-//      since a separate .css file would never be loaded.
+//   2. Imported CSS is written to `index.css`, which `metadata.json` declares as
+//      `entries.css`; the loader adopts it before each `load()` and removes it
+//      on unload.
 //   3. The bundle is an ES module exporting `load(ctx)`, which the v3 loader
 //      calls; `load` itself awaits a capped client-readiness wait. stdlib
 //      imports (`/modules/stdlib/…`) stay external — the client serves them.
 
 import { existsSync } from "node:fs";
-import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { BunPlugin } from "bun";
@@ -68,7 +69,7 @@ async function modulesDir(): Promise<string> {
 }
 
 /** v3 module metadata, derived from package.json so the version stays in sync. */
-async function metadata(): Promise<string> {
+async function metadata(hasCss: boolean): Promise<string> {
   const pkg = await Bun.file("package.json").json();
   return `${JSON.stringify(
     {
@@ -77,7 +78,7 @@ async function metadata(): Promise<string> {
       authors: [pkg.author],
       description: pkg.description,
       tags: [],
-      entries: { js: "index.js" },
+      entries: hasCss ? { js: "index.js", css: "index.css" } : { js: "index.js" },
       hasMixins: false,
       dependencies: pkg.spicetify?.dependencies ?? {},
     },
@@ -105,7 +106,7 @@ async function build(outDir: string, minify: boolean): Promise<void> {
     throw new Error("Bundle failed.");
   }
 
-  // Bun emits CSS imports as sibling .css files; fold them back into the JS.
+  // Bun emits CSS imports as sibling .css files; collect them into one sheet.
   let js = "";
   let css = "";
   for (const file of await readdir(tmp)) {
@@ -114,26 +115,16 @@ async function build(outDir: string, minify: boolean): Promise<void> {
     else if (file.endsWith(".js")) js += text;
   }
 
-  // Runs once, at module evaluation, ahead of the bundled code.
-  const styleInjection = css
-    ? `if (!document.getElementById(${JSON.stringify(NAME)})) {
-  const el = document.createElement("style");
-  el.id = ${JSON.stringify(NAME)};
-  el.textContent = ${JSON.stringify(css)};
-  document.head.appendChild(el);
-}
-`
-    : "";
-
-  const bundle = `${styleInjection}${js}`;
-
   await mkdir(outDir, { recursive: true });
   const outFile = join(outDir, "index.js");
-  await writeFile(outFile, bundle);
-  await writeFile(join(outDir, "metadata.json"), await metadata());
+  await writeFile(outFile, js);
+  const cssFile = join(outDir, "index.css");
+  if (css) await writeFile(cssFile, css);
+  else if (existsSync(cssFile)) await unlink(cssFile); // stale from an earlier build
+  await writeFile(join(outDir, "metadata.json"), await metadata(css !== ""));
   await rm(tmp, { recursive: true });
 
-  const kb = (Bun.stringWidth(bundle) / 1024).toFixed(1);
+  const kb = (Bun.stringWidth(js) / 1024).toFixed(1);
   console.log(`Built ${outFile} (${kb} kB)${minify ? " [minified]" : ""}`);
 }
 
