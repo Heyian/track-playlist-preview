@@ -155,12 +155,13 @@ rollback gain no step.
   here**, every `getContents(P, …)` page request carries `sort: { field: F, order: O }`.
 - **V2** — Given `sortedState` has no entry for P, `getContents(P, …)` is called with no `sort` key,
   and the preview queue is in P's stored order.
-- **V3** — Given `sortedState[P].field` is a string not in the known field list, it is passed to
-  `getContents` unchanged.
-- **V4** — Given `sortedState[P]` is not an object, has a `field` that is not a non-empty string, or
-  reading `sortedState` throws, no `sort` is passed and the preview starts normally.
-- **V5** — Given `sortedState[P].order` is neither `"ASC"` nor `"DESC"`, `sort` is passed with
-  `field` only.
+- **V3** — Given `sortedState[P].field` is a non-empty string not in the known field list (Finding 1),
+  it is passed to `getContents` unchanged, with `order` handled per V5.
+- **V4** — Given reading `sortedState` throws, or the `sortedState` map itself is not an object, or
+  `sortedState[P]` is not an object, or its `field` is not a non-empty string, no `sort` is passed
+  and the preview starts normally.
+- **V5** — Given `sortedState[P].field` is a non-empty string and `sortedState[P].order` is neither
+  `"ASC"` nor `"DESC"`, `sort` is passed with `field` only. Invalid fields remain governed by V4.
 
 **Page filter**
 
@@ -169,8 +170,11 @@ rollback gain no step.
 - **V7** — Given the open page's collection URI is not P (preview started from the sidebar menu
   while another page — filtered or not — is open), no `filter` is passed.
 - **V8** — Given the filter box is absent or its trimmed value is empty, no `filter` is passed.
-- **V9** — Given P has both a saved sort and a page filter, one `getContents` request carries both,
-  and the preview queue equals, in order, the tracks the page lists (verified live).
+- **V8a** — Text in a search box outside the open page's main view — e.g. the sidebar's "Search in
+  Your Library" — is never passed as `filter`, whether or not the page has its own filter box.
+- **V9** — Given P has both a saved sort and a page filter, every `getContents(P, …)` page request
+  carries both, and the preview queue equals the eligible entries (AC6) of the page's sorted,
+  filtered list, preserving their relative order (verified live).
 
 **Liked Songs**
 
@@ -181,8 +185,9 @@ rollback gain no step.
 - **V11** — Given `_likedSongsUri` is missing or not a `spotify:playlist:…` string, enumeration uses
   `LibraryAPI.getTracks` exactly as before, with no sort or filter, and the preview starts.
 - **V12** — During a Liked Songs session, the session's collection URI is
-  `spotify:collection:tracks`: the Liked Songs action-bar button reads "Stop preview" and the panel
-  source label is unchanged from before this change.
+  `spotify:collection:tracks`: the Liked Songs action-bar button reads "Stop preview", the panel
+  source label is unchanged from before this change, and the panel shows no Remove button (R2
+  unchanged), even when enumeration used the internal playlist URI.
 
 **Albums and artists**
 
@@ -195,16 +200,19 @@ rollback gain no step.
   the saved sort, editing the page filter, or navigating away does not change the preview queue's
   order, membership, or total.
 - **V15** — Given a sorted and/or filtered page, **Preview from here** on a row starts at that
-  track's index in the view-order queue, and the next tracks previewed are the rows below it on the
-  page.
+  track's index in the view-order queue, and the next tracks previewed are the eligible rows below it
+  on the page. When the track URI occurs more than once in the queue, the session starts at its
+  **first** occurrence (existing controller behaviour; clicked-occurrence start is #12).
 - **V16** — Given **Preview from here** on a track not in the view-order queue, a single-track
   preview starts (AC37 unchanged).
-- **V17** — Given a page filter that matches no eligible track, "Nothing to preview" is shown and no
-  session starts (AC8 unchanged): Spotify is not paused and no panel opens.
+- **V17** — Given a page filter that matches no eligible track, starting from **Preview all** or the
+  collection context menu shows "Nothing to preview" and no session starts (AC8 unchanged): Spotify
+  is not paused and no panel opens. **Preview from here** in the same state follows V16.
 - **V18** — The panel's source text total equals the view-order queue's length; no filter marker is
   shown.
-- **V19** — Given a sorted playlist with more than 100 eligible tracks, enumeration pages through
-  `getContents` with the same `sort` on every page and returns every eligible track exactly once.
+- **V19** — Given a sorted playlist with more than 100 eligible entries, enumeration pages through
+  `getContents` with the same `sort` on every page and returns every eligible playlist entry exactly
+  once, keeping separate entries for repeated occurrences of the same track URI.
 
 **Code constraints**
 
@@ -225,8 +233,9 @@ rollback gain no step.
 
 ## Deferred Items
 
-None — live-follow of page changes (Q1 B) and a stored-order setting (Q3 B) were rejected, not
-deferred.
+- #12 — Preview from here should start at the clicked copy of a duplicated track
+
+Live-follow of page changes (Q1 B) and a stored-order setting (Q3 B) were rejected, not deferred.
 
 ## Glossary Updates & ADRs
 
@@ -254,7 +263,7 @@ None — the live verification of V9, V10 and V15 uses the debug port, which alr
 | --- | --- |
 | `docs/specs/2026-07-22-track-playlist-preview-design.md` | Apply the **Amendments to the v1 spec** above, each with a pointer to this spec; mark #1 resolved under Deferred Items. |
 | `docs/spicetify-v3-platform.md` | Add a short "Spotify Platform APIs" section recording findings 1, 3, 4 and 6 (with a pointer here for detail). |
-| `CLAUDE.md` | One pointer row under **Documentation**: `View-order spec — sort and filter in the preview queue, criteria V1–V22.` |
+| `CLAUDE.md` | One pointer row under **Documentation**: `View-order spec — sort and filter in the preview queue, criteria V1–V22 and V8a.` |
 
 ## Implementation Plan Guidance
 
@@ -293,6 +302,6 @@ None — the live verification of V9, V10 and V15 uses the debug port, which alr
 >
 > ### Before finishing the branch (advisory cross-model review)
 >
-> After the final build passes — and before wrapping up via `superpowers:finishing-a-development-branch` — if a cross-model review helper is available (e.g. the Codex plugin's adversarial review), run it with focus: *"Judge correctness against the spec's acceptance criteria (V1–V22) only. Do not flag anything outside the stated criteria — no design alternatives, hardening, or scope the spec did not claim."*
+> After the final build passes — and before wrapping up via `superpowers:finishing-a-development-branch` — if a cross-model review helper is available (e.g. the Codex plugin's adversarial review), run it with focus: *"Judge correctness against the spec's acceptance criteria (V1–V22 and V8a) only. Do not flag anything outside the stated criteria — no design alternatives, hardening, or scope the spec did not claim."*
 >
 > This **never gates a merge** — the gate stays `bun run check` plus `bun run build`; the review only flags what deserves a second look. If no helper is available, finish the branch without it.
