@@ -6,6 +6,7 @@
 import { createSettings, type Settings } from "./settings";
 import { createPreviewSource } from "./previewSource";
 import { enumerate, collectionTypeForUri } from "./collections";
+import { createViewOrder } from "./collections/viewOrder";
 import { createPreviewEngine } from "./previewEngine";
 import { createPlayerCoordinator } from "./playerCoordinator";
 import { createPreviewController } from "./previewController";
@@ -21,6 +22,9 @@ import {
   playlistMetadata,
   playlistRemove,
   artistOverviewRequest,
+  readSortedState,
+  readFilterText,
+  likedSongsPlaylistUri,
 } from "./spotify/ports";
 import { createCollectionLabel } from "./spotify/collectionLabel";
 import { fetchTrackRef } from "./spotify/fetchTrackRef";
@@ -87,6 +91,7 @@ function build(built: (() => void)[]): { settings: Settings; dispose: () => void
   const source = createPreviewSource(trackPreviewRequest);
   const collectionDeps = createCollectionDeps();
   const classify = (uri: string): CollectionType | null => collectionTypeForUri(uri, spicetifyUriMatcher);
+  const viewOrder = createViewOrder({ readSortedState, likedSongsPlaylistUri, currentCollectionUri, readFilterText });
 
   const coordinator = createPlayerCoordinator(createPlayerPort());
   const audio = createAudioPort();
@@ -125,7 +130,8 @@ function build(built: (() => void)[]): { settings: Settings; dispose: () => void
   controller = createPreviewController({
     engine,
     coordinator,
-    enumerate: (uri) => enumerate(uri, collectionDeps, classify),
+    // The view is read here, once per session start, which locks the queue (V14).
+    enumerate: (uri) => enumerate(uri, collectionDeps, classify, viewOrder.viewFor(uri, classify(uri))),
     fetchTrackRef,
     collectionTypeForUri: classify,
     notify: notifications,

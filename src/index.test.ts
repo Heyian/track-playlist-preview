@@ -39,10 +39,17 @@ vi.mock("./spotify/ports", () => {
     localStorageAdapter: { get: (k: string) => store.get(k) ?? null, set: (k: string, v: string) => void store.set(k, v) },
     trackPreviewRequest: vi.fn(),
     createCollectionDeps: vi.fn(() => ({})),
-    spicetifyUriMatcher: {},
+    spicetifyUriMatcher: {
+      isPlaylistV1OrV2: (u: string) => u.startsWith("spotify:playlist:"),
+      isAlbum: (u: string) => u.startsWith("spotify:album:"),
+      isArtist: (u: string) => u.startsWith("spotify:artist:"),
+    },
     playlistMetadata: vi.fn(),
     playlistRemove: vi.fn(),
     artistOverviewRequest: vi.fn(),
+    readSortedState: vi.fn(() => ({})),
+    readFilterText: vi.fn(() => null),
+    likedSongsPlaylistUri: vi.fn(() => null),
   };
 });
 
@@ -54,6 +61,7 @@ import { createActionBarButton } from "./ui/actionBarButton";
 import { createPreviewPanel } from "./ui/previewPanel";
 import { createPreviewController } from "./previewController";
 import { rowHighlight } from "./ui/rowHighlight";
+import { createCollectionDeps, readSortedState, readFilterText } from "./spotify/ports";
 import type { Settings } from "./settings";
 
 const ctx = () => ({ spotifyVersion: "1.2.96.518", identifier: "track-playlist-preview", defer: vi.fn() });
@@ -204,5 +212,29 @@ describe("load and unload (U20–U24, U31)", () => {
     for (const n of [0, 1]) for (const m of teardowns(n)) expect(m).toHaveBeenCalledTimes(1);
     for (const m of teardowns(2)) expect(m).not.toHaveBeenCalled();
     expect(menus(2).register).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("view order wiring (V1, V6, V14)", () => {
+  beforeEach(() => {
+    vi.mocked(waitForClient).mockResolvedValue(undefined);
+  });
+
+  it("the controller's enumerate reads the saved sort and page filter when a session starts", async () => {
+    const P = "spotify:playlist:P";
+    const getContents = vi.fn(async () => ({ items: [], totalLength: 0 }));
+    vi.mocked(createCollectionDeps).mockReturnValue({ playlistApi: { getContents } } as never);
+    vi.mocked(readSortedState).mockReturnValue({ [P]: { field: "TITLE", order: "ASC" } });
+    vi.mocked(readFilterText).mockReturnValue(" live ");
+    (globalThis as { Spicetify?: unknown }).Spicetify = { Platform: { History: { location: { pathname: "/playlist/P" } } } };
+    try {
+      await load(ctx());
+      expect(readSortedState).not.toHaveBeenCalled(); // read per session start, not at load
+      const { enumerate } = vi.mocked(createPreviewController).mock.calls[0]![0];
+      await enumerate(P);
+      expect(getContents).toHaveBeenCalledWith(P, expect.objectContaining({ sort: { field: "TITLE", order: "ASC" }, filter: "live" }));
+    } finally {
+      delete (globalThis as { Spicetify?: unknown }).Spicetify;
+    }
   });
 });
