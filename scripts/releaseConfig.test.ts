@@ -13,7 +13,10 @@ describe("release-please", () => {
     expect(config["bootstrap-sha"]).toMatch(/^[0-9a-f]{40}$/);
   });
 
-  it("manifest starts before the first release", () => {
-    expect(read(".release-please-manifest.json")).toEqual({ ".": "0.0.0" });
+  // The manifest holds the last released version, so its value changes with every release PR.
+  it("manifest tracks the root package with a semver version", () => {
+    const manifest = read(".release-please-manifest.json");
+    expect(Object.keys(manifest)).toEqual(["."]);
+    expect(manifest["."]).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });
