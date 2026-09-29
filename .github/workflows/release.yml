@@ -50,13 +50,16 @@ jobs:
           dist: dist/track-playlist-preview@${{ steps.version.outputs.version }}
           release-tag: ${{ needs.release-please.outputs.tag_name }}
           token: ${{ secrets.SPICETIFY_SUBMIT_TOKEN }}
+      # publish@v1 declares an `entry` output but never sets it; the entry is only written to
+      # submission-entry.json in the workspace.
       - name: Write the store entry to the summary
-        env:
-          ENTRY: ${{ steps.publish.outputs.entry }}
         run: |
           {
             echo '### Store entry'
+            echo
+            echo 'Add as `vault/track-playlist-preview.json` in a spicetify/modules PR:'
+            echo
             echo '```json'
-            echo "$ENTRY"
+            cat submission-entry.json
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
