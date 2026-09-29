@@ -36,17 +36,33 @@ skipped automatically and reported at the end of the session.
 
 ## Install
 
-Requires [Spicetify](https://spicetify.app/docs/getting-started) **v3** (CLI 3.x) and
-[Bun](https://bun.com/docs/installation). v2 is not supported: the build installs into the v3
-`modules` folder, and `spicetify config extensions …` is not used.
+Requires [Spicetify](https://spicetify.app/docs/getting-started) **v3** (CLI 3.x). v2 is not
+supported.
+
+### From the module store
+
+Install **Track & Playlist Preview** from the in-client store, or from a terminal:
+
+```bash
+spicetify pkg install track-playlist-preview
+spicetify pkg enable track-playlist-preview
+spicetify apply          # restarts Spotify
+```
+
+### From source
+
+Also requires [Bun](https://bun.com/docs/installation) and [Node.js](https://nodejs.org) ≥ 22.
 
 ```bash
 git clone https://github.com/Heyian/track-playlist-preview.git
 cd track-playlist-preview
 bun install
-bun run build            # bundles into your Spicetify modules folder
+bun run build            # builds into your Spicetify modules folder
 spicetify apply          # restarts Spotify
 ```
+
+A source build replaces a store install of the module in the `modules` folder; the store's copy is
+left in place.
 
 The module depends on Spicetify's **stdlib** module (≥ 1.13.0), declared in its `metadata.json`.
 `spicetify apply` installs stdlib and keeps it current, so there is nothing to install by hand. If
@@ -68,26 +84,36 @@ Open the profile menu in Spotify → **Spicetify Settings** → **Track & Playli
 
 ```bash
 bun run build        # build into <spicetify config>/modules/track-playlist-preview/
-bun run build:local  # build into ./dist/track-playlist-preview/ instead (minified), without installing
-bun run watch        # rebuild on change
+bun run build:local  # build into ./dist/track-playlist-preview@<version>/, without installing
+bun run watch        # rebuild on change and install as `build` does
 bun run check        # typecheck + tests
+bun run check:dist   # check the build:local folder's files and metadata
 bun run test         # tests only
 ```
 
 After any build, run `spicetify apply` for Spotify to pick up the change. It force-restarts Spotify.
 
-The bundler is a small [Bun](https://bun.com/docs/bundler) script in [`build.ts`](build.ts). It
-aliases `react` / `react-dom` to Spotify's own `Spicetify.React` / `Spicetify.ReactDOM` and writes
-the v3 module's `index.js`, `index.css` and `metadata.json` (version taken from `package.json`).
-Imported CSS goes to `index.css`, which `metadata.json` declares as `entries.css`: Spicetify's loader
-adopts the stylesheet when the module loads and removes it when the module is disabled. `index.js`
-exports `load(ctx)`, which waits (capped) for Spicetify to finish loading before wiring anything.
+[`build.ts`](build.ts) runs [spicetify-kit](https://www.npmjs.com/package/@spicetify/kit)
+(`spicetify-kit build src`) under Node ≥ 22, then copies its output into place. Kit bundles
+`src/index.ts`, compiles `src/index.scss` to `index.css`, copies `src/metadata.json`, and fails the
+build on an error-tier finding against the module standard. React resolves through stdlib's
+react-shim. The output is unminified and ships its sourcemap. `build:local` writes the folder the
+release zips.
+
+`src/metadata.json` is the source of the module metadata. Its `version` must equal `package.json`'s;
+release-please bumps both.
+
+Commits use Conventional Commit prefixes (`feat:`, `fix:`, `docs:`, `chore:`, `test:`,
+`refactor:`, `ci:`, `build:`): release-please reads them to choose the next version and write the
+changelog. Merging a release PR tags the release, and CI attaches the zip and submits it to the
+module store.
 
 ### Debugging against the live client
 
-Spotify's desktop client is built on Chromium (CEF), so it can expose the Chrome DevTools Protocol. Under Spicetify v3,
-`spicetify dev` enables developer mode, and Spotify started by `spicetify apply` listens on
-`127.0.0.1:8088`, which you can drive programmatically — useful for probing internal APIs without
+Spotify's desktop client is built on Chromium (CEF), so it can expose the Chrome DevTools Protocol.
+Spicetify CLI 3.0.0-beta.19 passes no launch flags, so after `spicetify apply` restart Spotify
+yourself with `/opt/spotify/spotify --remote-debugging-port=8088` (adjust the path). It then listens
+on `127.0.0.1:8088`, which you can drive programmatically — useful for probing internal APIs without
 clicking through the UI:
 
 ```bash

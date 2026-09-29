@@ -1,0 +1,12 @@
+{
+  "name": "track-playlist-preview",
+  "version": "0.1.0",
+  "description": "Brings back Spotify's removed track preview and extends it to whole playlists, albums, artists and Liked Songs.",
+  "authors": ["Heyian"],
+  "entries": { "js": "index.js", "css": "index.css" },
+  "hasMixins": false,
+  "dependencies": { "stdlib": "^1.13.0" },
+  "preview": "https://raw.githubusercontent.com/Heyian/track-playlist-preview/main/docs/preview.png",
+  "repository": "https://github.com/Heyian/track-playlist-preview",
+  "license": "MIT"
+}

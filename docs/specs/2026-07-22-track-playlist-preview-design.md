@@ -335,7 +335,7 @@ Filed against `Heyian/track-playlist-preview`:
 
 - #1 — Preview should follow the visible sorted/filtered order — *resolved by `2026-09-28-view-order-design.md`.*
 - #2 — Optional full-playback fallback for tracks with no preview clip
-- #3 — Package for the Spicetify Marketplace
+- #3 — Package for the Spicetify Marketplace — *resolved by `2026-09-28-store-publishing-design.md` (the v3 module store replaces the Marketplace).*
 
 Resolved during design rather than deferred: migrating off `spicetify-creator`. Its JSR successor
 `@spicetify/bundler` is archived and Deno-only, so the build was moved to a local Bun bundler
