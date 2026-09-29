@@ -5,7 +5,8 @@
     ".": {
       "release-type": "node",
       "bump-minor-pre-major": true,
-      "extra-files": [{ "type": "json", "path": "src/metadata.json", "jsonpath": "$.version" }]
+      "extra-files": [{ "type": "json", "path": "src/metadata.json", "jsonpath": "$.version" }],
+      "include-component-in-tag": false
     }
   }
 }

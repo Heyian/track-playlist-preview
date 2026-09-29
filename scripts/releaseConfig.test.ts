@@ -13,6 +13,12 @@ describe("release-please", () => {
     expect(config["bootstrap-sha"]).toMatch(/^[0-9a-f]{40}$/);
   });
 
+  // The publish job checks the tag is exactly v<version>; release-please's default tag is
+  // <component>-v<version>.
+  it("config tags releases as v<version>", () => {
+    expect(read("release-please-config.json").packages["."]["include-component-in-tag"]).toBe(false);
+  });
+
   // The manifest holds the last released version, so its value changes with every release PR.
   it("manifest tracks the root package with a semver version", () => {
     const manifest = read(".release-please-manifest.json");
