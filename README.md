@@ -44,10 +44,13 @@ supported.
 Install **Track & Playlist Preview** from the in-client store, or from a terminal:
 
 ```bash
-spicetify pkg install track-playlist-preview
-spicetify pkg enable track-playlist-preview
-spicetify apply          # restarts Spotify
+spicetify pkg install track-playlist-preview              # prints "found track-playlist-preview@<version>"
+spicetify pkg enable track-playlist-preview@<version>     # the version install printed
+spicetify apply                                           # restarts Spotify
 ```
+
+To install a release zip directly (unverified, e.g. before the store lists a version), name the
+version in the id: `spicetify pkg install track-playlist-preview@0.1.0 <zip URL>`.
 
 ### From source
 

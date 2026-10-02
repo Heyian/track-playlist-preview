@@ -100,8 +100,10 @@ Sources: spicetify/actions `f1eb217` (`publish/action.yml`, `README.md`); spicet
      used.
 6. **How the CLI installs a store module.** It picks the version from `enabled`, otherwise the
    highest. It tries each artifact URL in order and checks the sha256; a mismatch aborts. It unzips
-   to `<config>/store/<id>/<version>`, and `pkg enable` links that into `modules/<id>`.
-   `spicetify pkg install <id> <url>` installs from a URL without verification.
+   to `<config>/store/<id>/<version>`, and `pkg enable <id>@<version>` links that into
+   `modules/<id>`. `spicetify pkg install <id>@<version> <url>` installs from a URL without
+   verification. Both commands reject a bare `<id>` (`expected module@version`); only a vault
+   install, `pkg install <id>` with no URL, takes the bare name (found after merge; see M25).
 7. **The state of third-party submissions (2026-09-28).** No third-party module has been merged into
    the registry yet.
    - spicetify/modules #10 (`sakura-lyrics`, entry written by hand, with `kind`) passes the
@@ -321,8 +323,8 @@ unminified, with the sourcemap shipped; README makes the store the primary insta
 - **M24** — While the version is below `1.0.0`, a release PR whose releasable commits include a
   breaking change (`feat!:` or a `BREAKING CHANGE:` footer) bumps the minor version, not the major.
 - **M25** — On a Spicetify v3 config that has never had this module, installing the exact `0.1.0`
-  release asset with `spicetify pkg install track-playlist-preview <asset URL>`, then
-  `spicetify pkg enable track-playlist-preview` and `spicetify apply`, passes every M7 check.
+  release asset with `spicetify pkg install track-playlist-preview@0.1.0 <asset URL>`, then
+  `spicetify pkg enable track-playlist-preview@0.1.0` and `spicetify apply`, passes every M7 check.
 
 Critique findings not taken as criteria: modules-folder discovery (unchanged from today); the
 bundled classmap (output bytes are identical with any classmap, finding 5); building from the tag
@@ -379,8 +381,8 @@ In order. The agent does none of these.
    summary.
 3. **Clean-install check.** On a machine, or a fresh Spicetify v3 config, that has never had this
    module:
-   1. `spicetify pkg install track-playlist-preview <release zip URL>`;
-   2. `spicetify pkg enable track-playlist-preview`;
+   1. `spicetify pkg install track-playlist-preview@0.1.0 <release zip URL>`;
+   2. `spicetify pkg enable track-playlist-preview@0.1.0`;
    3. `spicetify apply`;
    4. confirm the action-bar button, a preview session, and the Settings section.
 4. **Open the store PR by hand.** Fork spicetify/modules. Add
@@ -396,7 +398,7 @@ In order. The agent does none of these.
 
 | Doc | Change |
 | --- | --- |
-| `README.md` | Install: the module store first (`spicetify pkg install track-playlist-preview`, or the in-client store), source second. Development: kit-based build, no minify, `src/metadata.json` as the metadata source, the commit-prefix convention. |
+| `README.md` | Install: the module store first (`spicetify pkg install track-playlist-preview`, then `pkg enable track-playlist-preview@<version>`, or the in-client store), source second. Development: kit-based build, no minify, `src/metadata.json` as the metadata source, the commit-prefix convention. |
 | `CLAUDE.md` | Rewrite the Build section for the kit wrapper (keep it short). Add the commit-prefix rule line and a pointer row to this spec. Drop the "Aliases react…" and "Writes imported CSS…" items. |
 | `docs/spicetify-v3-platform.md` | Record findings 3, 4, 5 and 6, and the `react-shim` React path. |
 | `docs/specs/2026-07-22-track-playlist-preview-design.md` | Point its #3 deferral at this spec. |

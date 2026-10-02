@@ -159,8 +159,11 @@ Findings".
   `spicetify-kit build`.
 - **Store installs.** The CLI picks the `enabled` version, else the highest, tries each artifact URL,
   checks the sha256 (a mismatch aborts), unzips to `<config>/store/<id>/<version>`, and
-  `pkg enable` symlinks that into `modules/<id>`. `spicetify pkg install <id> <url>` skips
-  verification.
+  `pkg enable <id>@<version>` symlinks that into `modules/<id>`; install never enables.
+  `spicetify pkg install <id>@<version> <url>` skips verification. `pkg enable` and URL installs
+  reject a bare `<id>` (`invalid store id … expected module@version`); only a vault install,
+  `pkg install <id>`, takes the bare name. Source: `module/vault.rs` `StoreIdentifier::parse`,
+  `commands/mod.rs` (dispatch), `commands/pkg.rs` `install`.
 - **Kit.** `spicetify-kit build src` bundles, compiles `src/index.scss` to `index.css`, copies
   `src/metadata.json`, writes the sidecar and fails on an error-tier finding. It rewrites `react`
   imports to `/modules/stdlib/src/expose/react-shim.js`, rejects CSS imported from TS, and writes
