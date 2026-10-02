@@ -44,6 +44,18 @@ jobs:
       - name: Read the version
         id: version
         run: echo "version=$(node -p "require('./src/metadata.json').version")" >> "$GITHUB_OUTPUT"
+      # publish@v1 merges our entry into a depth-1 clone of the token owner's spicetify/modules
+      # fork. A stale fork would drop versions published since, so sync it first.
+      - name: Sync the spicetify/modules fork
+        env:
+          GH_TOKEN: ${{ secrets.SPICETIFY_SUBMIT_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "No SPICETIFY_SUBMIT_TOKEN: publish runs print-only."
+            exit 0
+          fi
+          gh repo fork spicetify/modules --clone=false --remote=false || true
+          gh repo sync "$(gh api user --jq .login)/modules" --source spicetify/modules --branch main
       - uses: spicetify/actions/publish@v1
         id: publish
         with:
